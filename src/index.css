@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;1,700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, blinkmacsystemfont, sans-serif;
+  --font-serif: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-zinc-950: #0C0C0E;
+  --color-zinc-900: #141417;
+  --color-zinc-850: #19191D;
+  --color-zinc-800: #1E1E22;
+  --color-zinc-700: #27272A;
+  --node-connection-color: #52525b;
+}
+
+:root {
+  --node-connection-color: #52525b;
+}
+
+/* Ensure line tracks and background layout structures do not steal pointer device interactions */
+.link-path,
+line,
+.links line {
+  pointer-events: none !important;
+}
+
+.bg-grid-overlay,
+svg rect.bg-grid {
+  pointer-events: none !important;
+}
+
+/* Force node groups to explicitly process passing hit vectors */
+.node-element,
+.node-group {
+  pointer-events: auto !important;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Ensure the absolute background canvas is locked behind everything */
+#canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1 !important; /* Forces the graph simulation to the bottom layer */
+  pointer-events: auto;
+}
+
+/* Force the text conversation thread container to the foreground layer */
+#v2-thread-overlay-container {
+  position: relative;
+  z-index: 2 !important; /* Lifts the entire text framework above the graph nodes (z-index: 2) */
+  width: 100%;
+  height: 100vh;
+  pointer-events: none; /* Allows mouse events in empty spaces to pass to the canvas */
+}
+
+/* Update the main message display timeline wrapper */
+.scrollable-message-stack {
+  position: absolute;
+  /* NEGATIVE OFFSET: Shifted to pull the element flush against the tab header rules */
+  top: 0px; 
+  margin-top: -8px; /* Force-closes internal element spacing gaps */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 680px;
+  pointer-events: none !important;
+  
+  /* Permitted to continue down the viewport past the 50% midpoint all the way to the input dock panel */
+  height: auto;
+  max-height: calc(100vh - 160px); 
+  overflow-y: auto;
+  overflow-x: hidden;
+  
+  /* PADDING CODES: Explicit asset padding defense layer at bottom */
+  padding-top: 5px !important;
+  padding-bottom: 32px !important;
+  padding-left: 24px;
+  padding-right: 24px;
+  
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  z-index: 2;
+  
+  /* Hide scrollbar completely to preserve style */
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+  pointer-events: none !important; /* Masking pointer events so mouse goes through empty gaps */
+}
+
+/* Card Component Restoration for Interactive Threads */
+.thread-turn-container {
+  pointer-events: none !important;
+}
+
+.v2-ask-question-card {
+  pointer-events: auto !important;
+}
+
+.v2-ai-answer-card {
+  pointer-events: auto !important;
+}
+
+.scrollable-message-stack::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Adjust the bottom continuation input layout panel placement */
+.v2-input-dock-panel {
+  position: absolute;
+  /* FLUSH FOOTER ANCHOR: Drops the input panel down into the absolute lowest boundary layer */
+  bottom: 0px; 
+  margin-bottom: 15px !important; /* Pulls the field into perfect alignment right above the footer rule with strict 15px gap */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 680px;
+  padding: 0 24px;
+  z-index: 3;
+  pointer-events: auto !important;
+}
+
+/* Ensure the entry text element spans the entire width allocation neatly with Glassmorphic styling matching default Answer card */
+.v2-input-dock-panel input {
+  width: 100%;
+  padding: 14px 20px;
+  background: rgba(15, 23, 42, 0.90) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  outline: none;
+}
+
+@media (min-width: 640px) {
+  .v2-input-dock-panel input {
+    font-size: 15px !important;
+  }
+}
+
+/* Re-activate absolute click mapping explicitly for the text card layout structures */
+.v2-ask-question-card,
+.v2-ai-answer-card,
+.thread-control-header,
+.v2-input-dock-panel {
+  pointer-events: auto !important;
+}
+
+/* Force overflow visible on parents and individual frames to prevent clipping */
+.thread-turn-container,
+.v2-ask-question-card,
+.v2-answer-animation-viewport,
+.v2-ai-answer-card {
+  overflow: visible !important;
+}
+
+/* Refactor the card styling parameters to keep text rendering razor sharp */
+.v2-ai-answer-card {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background: rgba(15, 23, 42, 0.90) !important; /* Amplified high-contrast glass panel backing */
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+  color: #ffffff !important;
+  text-shadow: none !important; /* Prevents text-shadow bleeding artifacts when layered */
+  border-radius: 16px !important;
+  contain: none !important;
+  box-sizing: border-box !important;
+}
+
+/* Isolation padding and margin defense layers */
+.thread-turn-container,
+.v2-ai-answer-card {
+  padding-bottom: 24px !important;
+  margin-bottom: 24px !important;
+}
+
+/* Eliminate cascading element gap builders inside the scroll loop */
+.thread-turn-container:first-child {
+  margin-top: 5px !important;
+  padding-top: 5px !important;
+}
+
+.v2-ask-question-card:first-of-type {
+  margin-top: 5px !important;
+  padding-top: 5px !important;
+}
+
+/* Custom Scrollbar styling for horizontal / vertical scrollbars across the app */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Custom horizontal scrollbar styling for the Active Doppelganger section */
+.custom-h-scrollbar::-webkit-scrollbar {
+  height: 2px !important; /* Thinner (1-2px range) */
+  background-color: #000000 !important; /* Black background for track */
+}
+
+.custom-h-scrollbar::-webkit-scrollbar-track {
+  background-color: #000000 !important; /* Black background */
+}
+
+.custom-h-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #000000 !important; /* Solid black when inactive */
+  border-radius: 9999px !important;
+}
+
+.custom-h-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(45, 212, 191, 0.9) !important; /* Bright teal when active/hovered */
+}

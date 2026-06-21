@@ -1,0 +1,16 @@
+services:
+  doppelganger:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: doppelganger
+    ports:
+      - "${HOST_PORT:-3001}:3000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - APP_URL=${APP_URL:-http://localhost:3000}
+      - NODE_ENV=production
+      - RUNNING_IN_DOCKER=true
+    env_file:
+      - .env
+    restart: unless-stopped
