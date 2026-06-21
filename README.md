@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="./public/doppelganger-main.png" alt="Doppelgänger Main" width="49%" />
-  <img src="./public/doppelganger-answer.png" alt="Doppelgänger Answer" width="49%" />
+  <img src="./public/doppelganger-main.png" alt="Doppelganger Main" width="49%" />
+  <img src="./public/doppelganger-answer.png" alt="Doppelganger Answer" width="49%" />
 </p>
 
-# Doppelgänger
+# Doppelganger
 
 [![React](https://img.shields.io/badge/React-19.0-blue.svg?logo=react)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.2-646CFF.svg?logo=vite)](https://vitejs.dev/)
@@ -11,7 +11,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Supported-2496ED.svg?logo=docker)](https://www.docker.com/)
 
-An AI-powered knowledge graph and cognitive twin platform. Doppelgänger transforms structured JSON into interactive knowledge maps, allowing Members to create, edit, and explore connected projects, notes, and expertise in real time through two system modes: View Mode and Contribute Mode.
+An AI-powered knowledge graph and cognitive twin platform. Doppelganger transforms structured JSON into interactive knowledge maps, allowing Members to create, edit, and explore connected projects, notes, and expertise in real time through two system modes: View Mode and Contribute Mode.
 
 ---
 
@@ -29,7 +29,7 @@ An AI-powered knowledge graph and cognitive twin platform. Doppelgänger transfo
 
 ## 🎨 Immersive Design & UI/UX Mechanics
 
-Doppelgänger uses a high-contrast dark space UI with layered glassmorphism and pointer-aware interaction zones.
+Doppelganger uses a high-contrast dark space UI with layered glassmorphism and pointer-aware interaction zones.
 
 ### 1. Layers & Z-Index Stratification
 

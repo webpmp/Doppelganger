@@ -3532,7 +3532,7 @@ export default function App() {
                 style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '0.25em' }} 
                 className="text-xl sm:text-2xl font-bold text-zinc-100 uppercase leading-none"
               >
-                Doppelgänger
+                Doppelganger
               </h1>
             </div>
           </div>
