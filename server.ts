@@ -882,41 +882,45 @@ User Input Query to Normalize:
 You are the interactive replication double (the Doppelgänger) of the developer brain.
 You must answer the visitor's query based strictly and exclusively on the allowed grounded memory notes below.
 
-Node Language Lock (System-Level Constraint)
-This rule applies AFTER generation and BEFORE response delivery.
+Node Language Enforcement (STRICT WHITELIST MODE)
+All AI-generated responses must comply with the following rules.
 
-Step 1: Forbidden Token Scan
-If the output contains ANY of the following:
+1. Allowed Structural Terms (ONLY)
+The AI may ONLY use these phrases when describing node structure:
+* Top-level Project
+* Workstream
+* Task
+No other structural descriptors are permitted.
+
+2. Forbidden Terms (HARD BAN)
+The following words MUST NEVER appear in any output:
 * parent
 * child
 * grandchild
 * hierarchy
-* level (when referring to structure)
-→ The output is INVALID.
+* level
+Any output containing these terms is INVALID.
 
-Step 2: Mandatory Rewrite Trigger
-If invalid tokens are detected:
-1. DELETE the entire response
-2. Regenerate response from scratch
-3. Enforce substitution rules below
+3. Hard Rewrite Rule
+If forbidden terms are produced:
+1. Immediately discard the full response
+2. Regenerate the response from scratch
+3. Ensure only whitelist terms are used
 
-Step 3: Required Substitutions
-* “parent project” → “Top-level Project”
-* “child project” → “Workstream”
-* “grandchild project” → “Task”
+4. Structural Description Rule
+* Do NOT describe relationships between nodes (no structural explanation)
+* Do NOT reference hierarchy, position, or nesting
+* Only describe nodes by functional label when required
 
-Step 4: Structural Rule
-The AI must NOT describe node relationships at all.
-No:
-* hierarchy descriptions
-* level explanations
-* structural positioning
-Only:
-* project content
-* functional labels (Top-level Project / Workstream / Task)
+5. Output Constraint
+All responses must be written using ONLY:
+* Top-level Project
+* Workstream
+* Task
+If a sentence cannot be written using only these terms, omit structural language entirely.
 
-Step 5: Output Gate
-A response is only valid if it passes the forbidden token scan. Otherwise it is discarded.
+6. Compliance Requirement
+Every output must pass a forbidden-term scan before delivery.
 
 Parsed Scope:
 - Target Doppelgängers: ${targetHandles.length > 0 ? targetHandles.join(", ") : "All accessible"}
@@ -957,7 +961,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Streaming response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Lock (System-Level Constraint): This rule applies AFTER generation and BEFORE response delivery. Forbidden words: parent, child, grandchild, hierarchy, level (when referring to structure). If any of these are detected, you must delete and regenerate the response from scratch enforcing functional substitutions: parent project -> Top-level Project, child project -> Workstream, grandchild project -> Task. The AI must NOT describe node relationships at all.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Enforcement (STRICT WHITELIST MODE): Allowed structural terms: Top-level Project, Workstream, Task (ONLY). Forbidden terms (HARD BAN): parent, child, grandchild, hierarchy, level. If any forbidden terms are produced, discard and regenerate from scratch. Do not explain structural positioning or graph nesting.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1037,7 +1041,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Fetching full response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Lock (System-Level Constraint): This rule applies AFTER generation and BEFORE response delivery. Forbidden words: parent, child, grandchild, hierarchy, level (when referring to structure). If any of these are detected, you must delete and regenerate the response from scratch enforcing functional substitutions: parent project -> Top-level Project, child project -> Workstream, grandchild project -> Task. The AI must NOT describe node relationships at all.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Enforcement (STRICT WHITELIST MODE): Allowed structural terms: Top-level Project, Workstream, Task (ONLY). Forbidden terms (HARD BAN): parent, child, grandchild, hierarchy, level. If any forbidden terms are produced, discard and regenerate from scratch. Do not explain structural positioning or graph nesting.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
