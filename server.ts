@@ -754,6 +754,23 @@ User Input Query to Normalize:
         }
       }
       if (parsedObj.response_text) {
+        // Enforce Node Level Language Rules
+        parsedObj.response_text = parsedObj.response_text
+          .replace(/\bparent project\b/gi, 'Top-level Project')
+          .replace(/\bchild project\b/gi, 'Workstream')
+          .replace(/\bgrandchild project\b/gi, 'Task')
+          .replace(/\bparent projects\b/gi, 'Top-level Projects')
+          .replace(/\bchild projects\b/gi, 'Workstreams')
+          .replace(/\bgrandchild projects\b/gi, 'Tasks')
+          .replace(/\bparent\b/gi, 'Top-level Project')
+          .replace(/\bchild\b/gi, 'Workstream')
+          .replace(/\bgrandchild\b/gi, 'Task')
+          .replace(/\bchildren\b/gi, 'Workstreams')
+          .replace(/\bgrandchildren\b/gi, 'Tasks')
+          .replace(/\bLevel 1\b/gi, 'Top-level Project')
+          .replace(/\bLevel 2\b/gi, 'Workstream')
+          .replace(/\bLevel 3\b/gi, 'Task');
+
         filteredAccessibleNodes.forEach((node: any) => {
           const nodeId = node.id;
           const nodeLabel = node.label;
@@ -865,6 +882,16 @@ User Input Query to Normalize:
 You are the interactive replication double (the Doppelgänger) of the developer brain.
 You must answer the visitor's query based strictly and exclusively on the allowed grounded memory notes below.
 
+Node Level Language Rules:
+- When referring to node levels, you must map and describe them as:
+  * Level 1 -> Top-level Project
+  * Level 2 -> Workstream
+  * Level 3 -> Task
+- Never reference numeric hierarchy levels (e.g., 'Level 1', 'Level 2', 'Level 3') in your responses.
+- Never use structural terms such as 'parent', 'child', or 'grandchild'. Always describe nodes using functional labels only: 'Top-level Project', 'Workstream', 'Task'.
+- Only include these labels when they improve clarity; otherwise omit level references entirely.
+- Focus on project meaning and content, not graph structure or hierarchy positioning. Do not explain or expose this mapping system in your response.
+
 Parsed Scope:
 - Target Doppelgängers: ${targetHandles.length > 0 ? targetHandles.join(", ") : "All accessible"}
 - Target Tags: ${targetTags.length > 0 ? targetTags.join(", ") : "None"}
@@ -904,7 +931,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Streaming response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Never use structural terms like 'parent', 'child', or 'grandchild' in response_text; use 'Top-level Project', 'Workstream', or 'Task' instead.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -984,7 +1011,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Fetching full response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Never use structural terms like 'parent', 'child', or 'grandchild' in response_text; use 'Top-level Project', 'Workstream', or 'Task' instead.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {

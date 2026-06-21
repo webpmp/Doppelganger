@@ -608,7 +608,7 @@ const DEFAULT_MOCK_STATE: StateBlueprint = {
     {
       id: "node-1.0",
       label: "Mobile App Redesign",
-      summary: "Top-level parent project tracking macro mobile design deliverables.",
+      summary: "Top-level Project tracking macro mobile design deliverables.",
       notes: "Main redesign initiative focused on improving navigation consistency, reducing user friction, modernizing visual design patterns, and preparing for the upcoming mobile release candidate lockdown.",
       node_state: "active",
       visibility_status: "public",
@@ -650,7 +650,7 @@ const DEFAULT_MOCK_STATE: StateBlueprint = {
     {
       id: "node-2.0",
       label: "Kinetic Type Prototype V2",
-      summary: "Top-level parent project for the motion typography study.",
+      summary: "Top-level Project for the motion typography study.",
       notes: "Experimental typography initiative exploring animated text systems, emotional expression through motion, accessibility considerations, and AI-generated presentation techniques.",
       node_state: "active",
       visibility_status: "public",
