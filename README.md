@@ -84,8 +84,9 @@ Nodes inherit color families from their Level 1 project roots:
 ```
 
 The system operates across two core pipelines:
-*   **Narrative Compaction**: Organic text entries are parsed by the AI backend to compile new semantic nodes, archive outdated memories, set encryption status, and build the 9-node structural dependency network.
-*   **Visitor Retrieval & Grounding**: Queries extract `@handles` and `#tags` to scope context. Memory records matching `#tags` receive score boosts, and the query returns first-person answers, attribution lists, and cited graph coordinates.
+
+*   **Narrative Compaction**: Structured or unstructured Member inputs are parsed into semantic nodes, memory updates, encryption states, and graph relationships.
+*   **Retrieval & Grounding**: View Mode queries resolve `@handles` and `#tags`, score relevant nodes, and return structured responses with attribution across the Member graph.
 
 ---
 
