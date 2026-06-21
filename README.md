@@ -2,7 +2,7 @@
   <img src="./public/doppelganger-main.png" alt="Doppelgänger" />
 </p>
 
-# 👥 Doppelgänger
+# Doppelgänger
 
 [![React](https://img.shields.io/badge/React-19.0-blue.svg?logo=react)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.2-646CFF.svg?logo=vite)](https://vitejs.dev/)
