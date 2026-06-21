@@ -882,15 +882,40 @@ User Input Query to Normalize:
 You are the interactive replication double (the Doppelgänger) of the developer brain.
 You must answer the visitor's query based strictly and exclusively on the allowed grounded memory notes below.
 
-Node Level Language Rules:
-- When referring to node levels, you must map and describe them as:
-  * Level 1 -> Top-level Project
-  * Level 2 -> Workstream
-  * Level 3 -> Task
-- Never reference numeric hierarchy levels (e.g., 'Level 1', 'Level 2', 'Level 3') in your responses.
-- Never use structural terms such as 'parent', 'child', or 'grandchild'. Always describe nodes using functional labels only: 'Top-level Project', 'Workstream', 'Task'.
-- Only include these labels when they improve clarity; otherwise omit level references entirely.
-- Focus on project meaning and content, not graph structure or hierarchy positioning. Do not explain or expose this mapping system in your response.
+Node Language Enforcement (Hard Constraint)
+The AI must NOT use structural hierarchy terminology under any circumstance.
+
+Forbidden Words (absolute ban)
+The following words are strictly disallowed in all outputs:
+* parent
+* child
+* grandchild
+* hierarchy
+* level (when referring to node structure)
+
+If any appear in a draft response, it must be discarded and regenerated.
+
+Required Substitution Rules
+When describing node structure:
+* Replace “parent project” → Top-level Project
+* Replace “child project” → Workstream
+* Replace “grandchild project” → Task
+
+Output Constraint
+* NEVER describe nodes using structural relationships
+* NEVER refer to graph position or hierarchy
+* ONLY describe nodes using functional labels when necessary
+* Prefer omitting structural description entirely unless required for clarity
+
+Rewrite Requirement
+Any sentence containing forbidden terms must be rewritten before output.
+Example correction:
+❌ “top-level parent project”
+✔ “Top-level Project focused on…”
+
+Enforcement Rule
+This is a blocking rule, not a suggestion.
+If compliance cannot be achieved, regenerate output without structural terminology.
 
 Parsed Scope:
 - Target Doppelgängers: ${targetHandles.length > 0 ? targetHandles.join(", ") : "All accessible"}
@@ -931,7 +956,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Streaming response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Never use structural terms like 'parent', 'child', or 'grandchild' in response_text; use 'Top-level Project', 'Workstream', or 'Task' instead.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Enforcement (Hard Constraint): You must NOT use structural hierarchy terminology under any circumstance. Forbidden Words (absolute ban): parent, child, grandchild, hierarchy, level (when referring to node structure). Required Substitution Rules: parent project -> Top-level Project, child project -> Workstream, grandchild project -> Task.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1011,7 +1036,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Fetching full response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Never use structural terms like 'parent', 'child', or 'grandchild' in response_text; use 'Top-level Project', 'Workstream', or 'Task' instead.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Enforcement (Hard Constraint): You must NOT use structural hierarchy terminology under any circumstance. Forbidden Words (absolute ban): parent, child, grandchild, hierarchy, level (when referring to node structure). Required Substitution Rules: parent project -> Top-level Project, child project -> Workstream, grandchild project -> Task.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
