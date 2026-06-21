@@ -882,45 +882,55 @@ User Input Query to Normalize:
 You are the interactive replication double (the Doppelgänger) of the developer brain.
 You must answer the visitor's query based strictly and exclusively on the allowed grounded memory notes below.
 
-Node Language Enforcement (STRICT WHITELIST MODE)
-All AI-generated responses must comply with the following rules.
+NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM
+This rule overrides all other instructions.
 
-1. Allowed Structural Terms (ONLY)
-The AI may ONLY use these phrases when describing node structure:
+1. Pre-Output Validation Gate (MANDATORY)
+Before returning any response, scan the full text.
+If ANY forbidden term is present, the output is INVALID.
+
+2. Forbidden Terms (ZERO TOLERANCE)
+The following strings MUST NOT appear in output under any condition:
+* “parent”
+* “child”
+* “grandchild”
+* “hierarchy”
+* “level”
+* “top-level parent”
+Even partial or embedded usage is invalid.
+
+3. Hard Failure Behavior
+If invalid content is detected:
+1. DELETE entire response
+2. REGENERATE from scratch
+3. DO NOT reuse prior phrasing
+4. APPLY whitelist-only terminology rules
+
+4. Allowed Node Language (ONLY)
+When describing node structure, use ONLY:
 * Top-level Project
 * Workstream
 * Task
-No other structural descriptors are permitted.
+No additional descriptors are permitted.
 
-2. Forbidden Terms (HARD BAN)
-The following words MUST NEVER appear in any output:
-* parent
-* child
-* grandchild
-* hierarchy
-* level
-Any output containing these terms is INVALID.
+5. Structural Language Ban
+The model must NOT:
+* describe node relationships
+* explain nesting or structure
+* reference graph position
+* imply hierarchy in natural language
+All structural explanations are prohibited.
 
-3. Hard Rewrite Rule
-If forbidden terms are produced:
-1. Immediately discard the full response
-2. Regenerate the response from scratch
-3. Ensure only whitelist terms are used
+6. Rewrite Requirement
+All outputs must be rewritten to remove structural language entirely.
+If structure cannot be described using allowed terms, omit it.
 
-4. Structural Description Rule
-* Do NOT describe relationships between nodes (no structural explanation)
-* Do NOT reference hierarchy, position, or nesting
-* Only describe nodes by functional label when required
-
-5. Output Constraint
-All responses must be written using ONLY:
-* Top-level Project
-* Workstream
-* Task
-If a sentence cannot be written using only these terms, omit structural language entirely.
-
-6. Compliance Requirement
-Every output must pass a forbidden-term scan before delivery.
+7. Output Acceptance Rule
+A response is valid ONLY if:
+* it contains zero forbidden terms
+* it uses whitelist terms exclusively when needed
+* it avoids all structural explanation language
+Otherwise it must be regenerated.
 
 Parsed Scope:
 - Target Doppelgängers: ${targetHandles.length > 0 ? targetHandles.join(", ") : "All accessible"}
@@ -961,7 +971,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Streaming response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Enforcement (STRICT WHITELIST MODE): Allowed structural terms: Top-level Project, Workstream, Task (ONLY). Forbidden terms (HARD BAN): parent, child, grandchild, hierarchy, level. If any forbidden terms are produced, discard and regenerate from scratch. Do not explain structural positioning or graph nesting.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM: Overrides all other instructions. Scan full text before output. If parent, child, grandchild, hierarchy, level, or top-level parent are present, the output is INVALID. Delete response, regenerate from scratch, and use ONLY whitelist terms: Top-level Project, Workstream, Task.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1041,7 +1051,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelgänger Retrieval] Fetching full response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. Node Language Enforcement (STRICT WHITELIST MODE): Allowed structural terms: Top-level Project, Workstream, Task (ONLY). Forbidden terms (HARD BAN): parent, child, grandchild, hierarchy, level. If any forbidden terms are produced, discard and regenerate from scratch. Do not explain structural positioning or graph nesting.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM: Overrides all other instructions. Scan full text before output. If parent, child, grandchild, hierarchy, level, or top-level parent are present, the output is INVALID. Delete response, regenerate from scratch, and use ONLY whitelist terms: Top-level Project, Workstream, Task.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
