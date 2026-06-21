@@ -1643,7 +1643,7 @@ export default function V2GuidedFlow({
 
             <div className="w-full pt-4 min-w-0 border-t border-[#27272A]/40 flex flex-col gap-2.5 text-left font-sans">
               <p className="text-[11px] text-zinc-400 max-w-sm mx-auto text-center leading-relaxed">
-                Query the collective minds of all team Doppelgangers instantly.
+                Access your team’s knowledge and expertise anytime.
               </p>
               <div className="text-[10px] font-mono uppercase tracking-widest text-[#2DD4BF] font-bold mt-2">Suggested Questions</div>
               <div id="suggested-queries-container" className="flex flex-col gap-1.5 w-full">
