@@ -64,7 +64,7 @@ Nodes inherit color families from their Level 1 project roots:
 
 ```
                  ┌────────────────────────────────┐
-                 │    OWNER NARRATIVE JOURNAL     │
+                 │     MEMBER JOURNAL INPUT       │
                  └────────────────┬───────────────┘
                                   │
                                   ▼
@@ -74,12 +74,12 @@ Nodes inherit color families from their Level 1 project roots:
                                   │ (Compacts and maps)
                                   ▼
                  ┌────────────────────────────────┐
-                 │      9-Node Isolated Matrix    │
+                 │      9-Node Dependency Graph   │
                  └────────────────────────────────┘
                                   ▲
-                                  │ (Context-secure sweeper)
+                                  │ (Context-secure retrieval)
                  ┌────────────────┴────────────────┐
-                 │      VISITOR QUERY SELECTION    │
+                 │      VIEW MODE QUERIES          │
                  └─────────────────────────────────┘
 ```
 
