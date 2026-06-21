@@ -1,3 +1,5 @@
+![Doppelgänger](./public/doppelganger-main.png)
+
 # 👥 Doppelgänger
 
 [![React](https://img.shields.io/badge/React-19.0-blue.svg?logo=react)](https://react.dev/)
