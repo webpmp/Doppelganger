@@ -1,4 +1,4 @@
-<video src="public/doppelganger-readme.mp4" autoplay loop muted playsinline width="100%"></video>
+<video src="https://github.com/webpmp/Doppelganger/raw/main/public/doppelganger-readme.mp4" autoplay loop muted playsinline width="100%"></video>
 
 # 👥 Doppelgänger
 
