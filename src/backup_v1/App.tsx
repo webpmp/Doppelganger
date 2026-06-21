@@ -3358,7 +3358,7 @@ export default function App() {
                   {selectedNodeObj && (
                     <div className="space-y-4 font-sans text-xs animate-fadeIn min-w-0">
                       <div className="flex justify-between items-start">
-                        <span className="text-[10px] font-semibold text-[#2DD4BF] uppercase tracking-wider font-mono">Project Note</span>
+                        <span className="text-[10px] font-semibold text-[#2DD4BF] uppercase tracking-wider font-mono">CONTEXT</span>
                         {(selectedNodeObj.isIsolated || selectedNodeObj.visibility_status === "isolated_passphrase") && (
                           hasAccessToSelected ? (
                             <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-[#2DD4BF] px-2 py-0.5 rounded-full flex items-center gap-1 font-mono">
@@ -4191,7 +4191,7 @@ export default function App() {
                     <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                     <div className="space-y-4 font-sans text-xs w-full">
                       <div className="flex justify-between items-start">
-                        <span className="text-[10px] font-semibold text-[#2DD4BF] uppercase tracking-wider font-mono">Project Note</span>
+                        <span className="text-[10px] font-semibold text-[#2DD4BF] uppercase tracking-wider font-mono">CONTEXT</span>
                         {(selectedNodeObj.isIsolated || selectedNodeObj.visibility_status === "isolated_passphrase") && (
                           hasAccessToSelected ? (
                             <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-[#2DD4BF] px-2 py-0.5 rounded-full flex items-center gap-1 font-mono">
