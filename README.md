@@ -10,7 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Supported-2496ED.svg?logo=docker)](https://www.docker.com/)
 
-An AI-native knowledge replication and cognitive twin platform. Doppelgänger compiles human memory fragments (Owner Journal Entries) and explorer prompts (Visitor Queries) into structured, interactive knowledge graphs using stream compaction, context-secure query grounding, and high-fidelity graph visualization.
+An AI-powered knowledge graph and cognitive twin platform. Doppelgänger transforms structured JSON data into interactive knowledge maps, allowing users to create, edit, and explore connected projects, notes, and expertise in real time.
 
 ---
 
