@@ -38,6 +38,7 @@ function DoppelgangerLogo({ className = "h-10 w-auto" }: { className?: string })
       src="/logo-doppelganger-black.png" 
       alt="Doppelgänger Logo" 
       className={`${className} object-contain rounded-lg`}
+      style={{ mixBlendMode: 'screen' }}
       referrerPolicy="no-referrer"
     />
   );
