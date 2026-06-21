@@ -3578,7 +3578,7 @@ export default function App() {
               {searchVal.startsWith("@") && (
                 <div className="p-2">
                   <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest px-2.5 py-1 select-none">
-                    USER SEARCH - SELECT DOPPELGÄNGER
+                    USER SEARCH - SELECT DOPPELGANGER
                   </div>
                   {profileSuggestions.length === 0 ? (
                     <div className="text-xs text-zinc-500 px-2.5 py-2">No matching profiles.</div>
@@ -3619,7 +3619,7 @@ export default function App() {
                     </div>
                   )}
                   <div className="text-[9px] font-bold text-pink-400 uppercase tracking-widest px-2.5 py-1 select-none flex items-center justify-between">
-                    <span>Knowledge Mode &mdash; Active Doppelgänger</span>
+                    <span>Knowledge Mode &mdash; Active Doppelganger</span>
                     <span className="text-zinc-500 font-mono">Use # to focus search</span>
                   </div>
                   {nodeSuggestions.length === 0 ? (
@@ -3898,7 +3898,7 @@ export default function App() {
                         <div className="bg-[#141417]/95 border border-[#27272A] rounded-xl px-3 py-2 flex items-center justify-between gap-4 shadow-xl backdrop-blur-md">
                           <div className="flex items-center gap-2">
                             <Users className="w-3.5 h-3.5 text-[#2DD4BF]" />
-                            <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase select-none">Switch to a matching Doppelgänger:</span>
+                            <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase select-none">Switch to a matching Doppelganger:</span>
                           </div>
                           <div className="flex items-center gap-2 overflow-x-auto">
                             {doppelgangerMatches.map(profile => (
@@ -5290,7 +5290,7 @@ export default function App() {
                 
                 {/* Profile Hot-Swapping Panel inside settings */}
                 <div className="p-3 bg-[#0D0D0F] border border-[#27272A] rounded-xl space-y-2">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Active Doppelgänger</span>
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Active Doppelganger</span>
                   <div className="flex overflow-x-auto gap-2 pt-1 pb-1.5 select-none flex-nowrap min-w-0 custom-h-scrollbar">
                     {PROFILES.map(prof => (
                       <button
@@ -5644,7 +5644,7 @@ export default function App() {
                               });
 
                               setAllProfilesDict(parsed);
-                              alert(`Successfully restored ${keys.length} Doppelgänger user profiles and node maps!`);
+                              alert(`Successfully restored ${keys.length} Doppelganger user profiles and node maps!`);
                             } catch (err: any) {
                               alert(`Import failed: ${err.message}`);
                             }

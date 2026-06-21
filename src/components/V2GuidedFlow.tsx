@@ -2127,14 +2127,14 @@ export default function V2GuidedFlow({
             </div>
           </div>
 
-          {/* Doppelgänger Creator */}
+          {/* Doppelganger Creator */}
           <div className="space-y-1.5 mt-4">
-            <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Doppelgänger:</div>
+            <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Doppelganger:</div>
             <div className="p-3.5 rounded-xl bg-[#141417] border border-zinc-600 flex items-center gap-3">
               {selectedNode.doppelgangerHandle && PROFILE_IMAGES[selectedNode.doppelgangerHandle] ? (
                 <img
                   src={PROFILE_IMAGES[selectedNode.doppelgangerHandle]}
-                  alt="Doppelgänger Creator"
+                  alt="Doppelganger Creator"
                   className="w-10 h-10 rounded-lg object-cover border border-zinc-600 bg-zinc-900 flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-[#2DD4BF]/50 transition duration-150"
                   referrerPolicy="no-referrer"
                   onClick={() => onSwitchProfile && onSwitchProfile(selectedNode.doppelgangerHandle!)}
@@ -2165,9 +2165,9 @@ export default function V2GuidedFlow({
                         {creatorInfo.handle}
                       </div>
                       <div className="text-[10px] text-zinc-500 mt-1 flex items-center gap-2 select-none border-t border-zinc-800/60 pt-1">
-                        <span>Public Nodes: <strong className="text-zinc-300 font-bold">{publicCount}</strong></span>
+                        <span>Public Notes: <strong className="text-zinc-300 font-bold">{publicCount}</strong></span>
                         <span className="text-zinc-700">|</span>
-                        <span className="flex items-center gap-0.5">Private Nodes: <strong className="text-zinc-300 font-bold">{privateCount}</strong></span>
+                        <span className="flex items-center gap-0.5">Private Notes: <strong className="text-zinc-300 font-bold">{privateCount}</strong></span>
                       </div>
                     </>
                   );

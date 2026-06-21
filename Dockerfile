@@ -1,4 +1,4 @@
-# Multi-stage build for Doppelgänger
+# Multi-stage build for Doppelganger
 FROM node:20-alpine AS builder
 
 WORKDIR /app

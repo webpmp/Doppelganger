@@ -261,7 +261,7 @@ app.post("/api/compaction", async (req, res) => {
     const edges = graphState.edges || [];
 
     const promptMessage = `
-You are the stream compaction engine for Doppelgänger (an AI native knowledge replication platform).
+You are the stream compaction engine for Doppelganger (an AI native knowledge replication platform).
 The owner is submitting a new daily work journal entry. Your task is to extract concepts, generate a proposed state, and provide reasonable change notes.
 
 Current State of Knowledge Graph:
@@ -283,7 +283,7 @@ Respond with valid JSON mapping the schema exactly.
 
     let parsedCompaction: any;
     try {
-      console.log(`[Doppelgänger Compaction] Processing narrative through active provider: ${config.provider}`);
+      console.log(`[Doppelganger Compaction] Processing narrative through active provider: ${config.provider}`);
       const schema = {
         type: Type.OBJECT,
         description: "Proposed mutations to the knowledge graph state",
@@ -879,7 +879,7 @@ User Input Query to Normalize:
       : "";
 
     const promptMessage = `
-You are the interactive replication double (the Doppelgänger) of the developer brain.
+You are the interactive replication double (the Doppelganger) of the developer brain.
 You must answer the visitor's query based strictly and exclusively on the allowed grounded memory notes below.
 
 NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM
@@ -933,7 +933,7 @@ A response is valid ONLY if:
 Otherwise it must be regenerated.
 
 Parsed Scope:
-- Target Doppelgängers: ${targetHandles.length > 0 ? targetHandles.join(", ") : "All accessible"}
+- Target Doppelgangers: ${targetHandles.length > 0 ? targetHandles.join(", ") : "All accessible"}
 - Target Tags: ${targetTags.length > 0 ? targetTags.join(", ") : "None"}
 
 Allowed Grounded Notes:
@@ -969,7 +969,7 @@ Respond with valid JSON mapping the schema:
     if (streamMode) {
       let parsed: any;
       try {
-        console.log(`[Doppelgänger Retrieval] Streaming response via active provider: ${config.provider}`);
+        console.log(`[Doppelganger Retrieval] Streaming response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
           systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM: Overrides all other instructions. Scan full text before output. If parent, child, grandchild, hierarchy, level, or top-level parent are present, the output is INVALID. Delete response, regenerate from scratch, and use ONLY whitelist terms: Top-level Project, Workstream, Task.",
           responseSchema: {
@@ -1049,7 +1049,7 @@ Respond with valid JSON mapping the schema:
     } else {
       let parsed: any;
       try {
-        console.log(`[Doppelgänger Retrieval] Fetching full response via active provider: ${config.provider}`);
+        console.log(`[Doppelganger Retrieval] Fetching full response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
           systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM: Overrides all other instructions. Scan full text before output. If parent, child, grandchild, hierarchy, level, or top-level parent are present, the output is INVALID. Delete response, regenerate from scratch, and use ONLY whitelist terms: Top-level Project, Workstream, Task.",
           responseSchema: {
@@ -1126,7 +1126,7 @@ async function bootstrap() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Doppelgänger Engine] Server running on http://localhost:${PORT}`);
+    console.log(`[Doppelganger Engine] Server running on http://localhost:${PORT}`);
   });
 }
 

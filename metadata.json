@@ -1,5 +1,5 @@
 {
-  "name": "Doppelgänger",
+  "name": "Doppelganger",
   "description": "An AI native knowledge replication platform that performs stream compaction and context-secure query grounding on local in-memory states.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
