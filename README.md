@@ -1,3 +1,5 @@
+<video src="public/doppelganger-readme.mp4" autoplay loop muted playsinline width="100%"></video>
+
 # 👥 Doppelgänger
 
 [![React](https://img.shields.io/badge/React-19.0-blue.svg?logo=react)](https://react.dev/)
