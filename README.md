@@ -94,7 +94,9 @@ The system operates across two core pipelines:
 3.  Set up environment configuration:
     ```bash
     cp .env.example .env
-    # Add your GEMINI_API_KEY to the .env file
+    # Configure your provider in the .env file:
+    # Option A (Gemini): Add your GEMINI_API_KEY
+    # Option B (LM Studio): Set endpoint configuration (e.g. http://localhost:1234)
     ```
 4.  Launch the development server:
     ```bash
