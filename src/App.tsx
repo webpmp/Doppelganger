@@ -5187,7 +5187,7 @@ export default function App() {
                 }
               }}
             >
-              PREVIEW
+              VIEW
             </button>
             {/* Segment: EDIT */}
             <button
@@ -5225,7 +5225,7 @@ export default function App() {
                 }
               }}
             >
-              EDIT
+              JOURNAL
             </button>
           </div>
         </div>
@@ -5246,7 +5246,7 @@ export default function App() {
              }`}
           >
             <Database className="w-3.5 h-3.5" />
-            Database Editor
+            JSON
           </button>
         </div>
       </footer>
