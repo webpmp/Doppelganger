@@ -2066,7 +2066,7 @@ export default function V2GuidedFlow({
 
           {/* Label */}
           <div className="space-y-1 pt-6">
-            <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Project Note</div>
+            <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">CONTEXT</div>
             <h2 className="text-sm font-semibold text-zinc-100 tracking-tight leading-snug">
               {formatNodeLabel(selectedNode.label)}
             </h2>
@@ -2167,7 +2167,7 @@ export default function V2GuidedFlow({
                       <div className="text-[10px] text-zinc-500 mt-1 flex items-center gap-2 select-none border-t border-zinc-800/60 pt-1">
                         <span>Public Nodes: <strong className="text-zinc-300 font-bold">{publicCount}</strong></span>
                         <span className="text-zinc-700">|</span>
-                        <span className="flex items-center gap-0.5">Private Nodes: <strong className="text-zinc-300 font-bold">{privateCount}</strong> 🔒</span>
+                        <span className="flex items-center gap-0.5">Private Nodes: <strong className="text-zinc-300 font-bold">{privateCount}</strong></span>
                       </div>
                     </>
                   );
