@@ -32,10 +32,10 @@ import KnowledgeGraphCanvas from "./components/KnowledgeGraphCanvas";
 import V2GuidedFlow from "./components/V2GuidedFlow";
 import { StructuralOutline } from "./components/StructuralOutline";
 
-function DoppelgangerLogo({ className = "w-10 h-10" }: { className?: string }) {
+function DoppelgangerLogo({ className = "h-10 w-auto" }: { className?: string }) {
   return (
     <img 
-      src="/logo-doppelganger_nobg.png" 
+      src="/logo-doppelganger-black.png" 
       alt="Doppelgänger Logo" 
       className={`${className} object-contain rounded-lg`}
       referrerPolicy="no-referrer"
@@ -3524,7 +3524,7 @@ export default function App() {
         
         {/* Left: Logo & System Name */}
         <div className="flex items-center gap-4 shrink-0">
-          <DoppelgangerLogo className="w-11 h-11" />
+          <DoppelgangerLogo />
           <div className="flex flex-col justify-center h-12">
             <div className="flex items-center gap-2">
               <h1 
