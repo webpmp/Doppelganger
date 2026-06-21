@@ -1730,7 +1730,7 @@ export default function V2GuidedFlow({
               >
                 {/* 1. ASK QUESTION CARD */}
                 <div 
-                  onClick={() => setV2FocusedThreadId(thread.id)}
+                  onClick={() => toggleThreadMinimized(thread.id)}
                   className="v2-ask-question-card w-full max-w-xl p-6 rounded-2xl text-white text-sm sm:text-[15px] font-sans flex flex-col gap-2 shadow-sm pointer-events-auto cursor-pointer relative !overflow-visible"
                   style={{ 
                     zIndex: 5,
@@ -1807,7 +1807,7 @@ export default function V2GuidedFlow({
                     className="v2-ai-answer-card w-full max-w-xl rounded-2xl cursor-pointer p-6 border shadow-2xl relative !overflow-visible"
                     style={{
                       boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-                      transform: thread.isMinimized ? "translateY(calc(-100% - 10px))" : "translateY(0)",
+                      transform: thread.isMinimized ? "translateY(calc(-100% + 2px))" : "translateY(0)",
                       opacity: thread.isMinimized ? 0.55 : 1,
                       pointerEvents: "auto", // Ensure the card's 6px sticking-out edge remains interactive and clickable
                       transition: "transform 0.38s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease",
