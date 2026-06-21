@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="./public/doppelganger-main.png" alt="Doppelgänger" />
+  <img src="./public/doppelganger-main.png" alt="Doppelgänger Main" width="49%" />
+  <img src="./public/doppelganger-answer.png" alt="Doppelgänger Answer" width="49%" />
 </p>
 
 # Doppelgänger
