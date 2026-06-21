@@ -11,46 +11,52 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/Docker-Supported-2496ED.svg?logo=docker)](https://www.docker.com/)
 
-An AI-powered knowledge graph and cognitive twin platform. Doppelgänger transforms structured JSON data into interactive knowledge maps, allowing users to create, edit, and explore connected projects, notes, and expertise in real time.
+An AI-powered knowledge graph and cognitive twin platform. Doppelgänger transforms structured JSON into interactive knowledge maps, allowing Members to create, edit, and explore connected projects, notes, and expertise in real time through two system modes: View Mode and Contribute Mode.
 
 ---
 
 ## 🌌 Core Features
 
-*   **Brain Swapping & Profile Navigation**: Securely isolate or hot-swap cognitive profiles (`@chris.adkins`, `@jordan.lee`, `@alex.morgan`) dynamically.
-*   **V2 Guided Exploration Flow**: Sleek thread timeline cards layered directly over the background graph simulation, facilitating fluid follow-up exploration.
+*   **Brain Swapping & Profile Navigation**: Securely isolate or switch between Member knowledge profiles (`@chris.adkins`, `@jordan.lee`, `@alex.morgan`) dynamically.
+*   **Mode-Based Interaction**: Members operate in View Mode for navigating and querying the knowledge graph, and Contribute Mode for creating and editing structured JSON knowledge entries.
+*   **V2 Guided Exploration Flow**: Sleek thread timeline cards layered directly over the background graph simulation, enabling fluid follow-up exploration.
 *   **Stable D3.js Data Joins**: Optimized SVG rendering pattern preserving DOM elements and drag transitions across state renders, preventing gesture breakages.
 *   **Context-Aware Autocomplete**: Triggering floating tag suggestions (`#`) and profile references (`@`) inside both search and refinement inputs.
 *   **Passphrase-Locked Nodes**: Dynamic encryption mapping. Certain database nodes remain greyed-out and encrypted (`isolated_passphrase`) until their matching key token hashes are unlocked.
-*   **Multi-Perspective Answering**: Synthesized response engine displaying citations and attribution timelines from multiple involved doppelgängers.
+*   **Multi-Perspective Answering**: Synthesized response engine displaying citations and attribution timelines from multiple involved Members.
 
 ---
 
 ## 🎨 Immersive Design & UI/UX Mechanics
 
-Doppelgänger utilizes a premium, high-contrast dark space UI with glassmorphic depth layers, tailored color families, and pointer-event mechanics.
+Doppelgänger uses a high-contrast dark space UI with layered glassmorphism and pointer-aware interaction zones.
 
 ### 1. Layers & Z-Index Stratification
-To optimize spatial layout and screen real estate, interactive panels are placed directly on top of the interactive D3 graph canvas:
-*   **Interactive Node Map**: Rendered at the absolute background layer (`z-index: 1`) using SVG.
-*   **Scrollable Message Stack**: Positioned in the foreground (`z-index: 2`).
-*   **Input Dock Panel**: Floats above the graph canvas at the bottom (`z-index: 3`).
-*   **AI Answer Card**: Nested inside the message stack (`z-index: 4`), using `backdrop-filter: blur(16px)` to let underlying nodes bleed through softly.
-*   **Ask Question Card**: Anchored at `z-index: 5` to capture structural focus.
 
-### 2. Pointer Event Click-Through Security
-To prevent invisible layout wrappers from blocking node click/hover/drag interactions:
-*   **Thread Containers**: `.thread-turn-container` uses `pointer-events: none !important` to act as a click-through layer.
-*   **Interactive Cards**: Individual question/answer decks explicitly override this with `pointer-events: auto !important` to keep inputs, buttons, and scrolling functional.
-*   **Map Nodes**: Circle hitboxes maintain `pointer-events: auto` while labels/text are set to `pointer-events: none` to avoid transparent boundaries overlapping neighbor nodes.
+To optimize spatial layout and prevent graph obstruction, UI panels sit above the interactive D3 graph canvas:
+*   **Interactive Node Map**: Background SVG layer (`z-index: 1`)
+*   **Scrollable Message Stack**: Foreground conversation layer (`z-index: 2`)
+*   **Input Dock Panel**: Bottom dock overlay (`z-index: 3`)
+*   **AI Answer Card**: Message-level response layer (`z-index: 4`) with backdrop blur for node visibility
+*   **Ask Question Card**: Focus capture layer (`z-index: 5`)
+
+### 2. Pointer Event Click-Through System
+
+To preserve node interactivity beneath overlays:
+*   **Thread Containers**: Non-interactive wrappers use `pointer-events: none`
+*   **Interactive Cards**: Explicit `pointer-events: auto` for inputs, buttons, and scrolling
+*   **Map Nodes**: Circle hit targets remain interactive while labels avoid blocking hit areas
 
 ### 3. Dynamic Color Families & Edge Focus
-Nodes inherit custom project families recursively matching their Level 1 parents:
+
+Nodes inherit color families from their Level 1 project roots:
 *   **Project 1 (Mobile App Redesign)**: Cyan theme (`#22d3ee` / `#155e75`)
 *   **Project 2 (Kinetic Type Prototype)**: Red/Pink theme (`#f43f5e` / `#881337`)
 *   **Project 3 (Design Sprint Planning)**: Emerald theme (`#34d399` / `#064e3b`)
 *   **Project 4 (Branding Framework)**: Amber theme (`#fbbf24` / `#78350f`)
-*   **Active vs. Inactive Links**: Connection lines connecting two active (cited) nodes are drawn in the project's brand color, while links connected to inactive (uncited) nodes render in muted grey (`#52525b`).
+
+*   **Active links**: colored by project family
+*   **Inactive links**: muted grey (`#52525b`)
 
 ---
 
