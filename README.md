@@ -1,4 +1,4 @@
-![Doppelgänger Demo](public/doppelganger-readme.mp4)
+![Doppelgänger Demo](https://github.com/webpmp/Doppelganger/raw/main/public/doppelganger-readme.mp4)
 
 # 👥 Doppelgänger
 
