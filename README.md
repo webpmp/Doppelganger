@@ -1,4 +1,6 @@
-![Doppelgänger](./public/doppelganger-main.png)
+<p align="center">
+  <img src="./public/doppelganger-main.png" alt="Doppelgänger" />
+</p>
 
 # 👥 Doppelgänger
 
