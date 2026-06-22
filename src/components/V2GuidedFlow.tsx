@@ -1381,8 +1381,7 @@ export default function V2GuidedFlow({
   }) || v2Threads.length > 0;
   
   const hasFavorites = favorites.length > 0;
-  const isFirstStart = v2Threads.length === 0;
-  const showBookmarksBar = isFirstStart ? hasFavorites : (hasActiveTopics || hasFavorites);
+  const showBookmarksBar = hasActiveTopics || hasFavorites || sessions.length > 1 || sessions.some(s => s.id === activeSessionId && s.id !== "session-1");
 
   return (
     <div className="flex-grow flex flex-col items-stretch justify-stretch relative h-[calc(100vh-140px)] overflow-hidden bg-[#0C0C0E]">
@@ -1442,8 +1441,8 @@ export default function V2GuidedFlow({
                   {headerMode === 'topics' ? (
                     sessions
                       .filter(session => {
-                        // Only show tabs for topics that have active message history
-                        return session.history && session.history.length > 0;
+                        // Show tab if it has history OR if it is the currently active empty session (created by clicking +)
+                        return (session.history && session.history.length > 0) || (session.id === activeSessionId);
                       })
                       .map(session => {
                         const isSelected = session.id === activeSessionId;
