@@ -1224,6 +1224,147 @@ export default function V2GuidedFlow({
     return { filteredNodes: finalNodes, filteredEdges: validatedEdges };
   }, [activeProfileHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens, mapFilterMode, activeThreadReferencedNodesStr]);
 
+  const getNodeLevel = (n: any): number => {
+    if (n.level !== undefined) {
+      if (typeof n.level === "number") {
+        return n.level;
+      }
+      if (n.level && typeof n.level === "object" && typeof n.level.value === "number") {
+        return n.level.value;
+      }
+    }
+    return classifyNodeLevel(n.label || "", "");
+  };
+
+  const activeThreadId = activeThread?.id || null;
+  const rawTopicTitle = activeThread?.topicTitle || "";
+  const rawAnswerText = activeThread?.answer || "";
+  const isQuerying = activeThread?.isQuerying || false;
+
+  const [streamState, setStreamState] = useState<"loading" | "topic-streaming" | "answer-streaming" | "completed">("completed");
+  const [displayedTopic, setDisplayedTopic] = useState("");
+  const [displayedAnswer, setDisplayedAnswer] = useState("");
+  const [nodeRevealStage, setNodeRevealStage] = useState(3);
+
+  const rawTopicRef = useRef(rawTopicTitle);
+  const rawAnswerRef = useRef(rawAnswerText);
+  const isQueryingRef = useRef(isQuerying);
+
+  useEffect(() => {
+    rawTopicRef.current = rawTopicTitle;
+    rawAnswerRef.current = rawAnswerText;
+    isQueryingRef.current = isQuerying;
+  }, [rawTopicTitle, rawAnswerText, isQuerying]);
+
+  const lastThreadIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeThreadId && activeThreadId !== lastThreadIdRef.current) {
+      lastThreadIdRef.current = activeThreadId;
+      if (isQuerying) {
+        setStreamState("loading");
+        setDisplayedTopic("");
+        setDisplayedAnswer("");
+        setNodeRevealStage(0);
+      } else {
+        setStreamState("completed");
+        setDisplayedTopic(rawTopicTitle);
+        setDisplayedAnswer(rawAnswerText);
+        setNodeRevealStage(3);
+      }
+    }
+  }, [activeThreadId, isQuerying, rawTopicTitle, rawAnswerText]);
+
+  useEffect(() => {
+    if (streamState === "loading") {
+      if (rawTopicTitle) {
+        setStreamState("topic-streaming");
+      }
+      return;
+    }
+
+    if (streamState === "topic-streaming") {
+      const words = rawTopicTitle.split(" ");
+      let currentWordIndex = 0;
+      setDisplayedTopic("");
+
+      const interval = setInterval(() => {
+        currentWordIndex++;
+        if (currentWordIndex > words.length) {
+          clearInterval(interval);
+          setStreamState("answer-streaming");
+          setNodeRevealStage(1);
+        } else {
+          setDisplayedTopic(words.slice(0, currentWordIndex).join(" "));
+        }
+      }, 70);
+
+      return () => clearInterval(interval);
+    }
+
+    if (streamState === "answer-streaming") {
+      let revealedWordCount = 0;
+      setDisplayedAnswer("");
+
+      const interval = setInterval(() => {
+        const fullText = rawAnswerRef.current || "";
+        if (fullText.startsWith("Searching notes")) {
+          return;
+        }
+        const words = fullText.split(" ");
+        
+        if (revealedWordCount < words.length) {
+          revealedWordCount++;
+          setDisplayedAnswer(words.slice(0, revealedWordCount).join(" "));
+        } else if (!isQueryingRef.current) {
+          clearInterval(interval);
+          setStreamState("completed");
+        }
+      }, 50);
+
+      return () => clearInterval(interval);
+    }
+
+    if (streamState === "completed") {
+      setDisplayedTopic(rawTopicTitle);
+      setDisplayedAnswer(rawAnswerText);
+      setNodeRevealStage(3);
+    }
+  }, [streamState, rawTopicTitle, activeThreadId]);
+
+  useEffect(() => {
+    if (nodeRevealStage === 1) {
+      const t1 = setTimeout(() => {
+        setNodeRevealStage(2);
+      }, 450);
+      return () => clearTimeout(t1);
+    }
+    if (nodeRevealStage === 2) {
+      const t2 = setTimeout(() => {
+        setNodeRevealStage(3);
+      }, 450);
+      return () => clearTimeout(t2);
+    }
+  }, [nodeRevealStage]);
+
+  const visibleNodes = useMemo(() => {
+    if (nodeRevealStage === 0) return [];
+    return filteredNodes.filter(n => {
+      const lvl = getNodeLevel(n);
+      if (nodeRevealStage === 1) return lvl === 1;
+      if (nodeRevealStage === 2) return lvl === 1 || lvl === 2;
+      return true;
+    });
+  }, [filteredNodes, nodeRevealStage]);
+
+  const visibleEdges = useMemo(() => {
+    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+    return filteredEdges.filter(edge => {
+      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
+      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
+      return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+    });
+  }, [visibleNodes, filteredEdges]);
+
   // Collapse thread helper
   const collapseAllThreads = () => {
     setV2Threads(prev => prev.map(t => ({ ...t, isMinimized: true })));
@@ -1578,8 +1719,8 @@ export default function V2GuidedFlow({
         >
           <div className="w-full h-full relative">
             <KnowledgeGraphCanvas
-              nodes={filteredNodes}
-              edges={filteredEdges}
+              nodes={visibleNodes}
+              edges={visibleEdges}
               selectedNodeId={selectedNodeId}
               unlockedTokens={unlockedTokens}
               onSelectNode={(id) => {
@@ -1711,7 +1852,12 @@ export default function V2GuidedFlow({
         >
           {v2Threads.map((thread, index) => {
             const isCurrentlyFocused = activeThread?.id === thread.id;
-            const themeTitle = (!thread.isQuerying && thread.topicTitle) ? toTitleCase(thread.topicTitle) : "";
+            const isStreamingActive = isCurrentlyFocused && streamState !== "completed";
+            const currentTopic = isStreamingActive 
+              ? (displayedTopic ? toTitleCase(displayedTopic) : "")
+              : (thread.topicTitle ? toTitleCase(thread.topicTitle) : "");
+            const currentAnswer = isStreamingActive ? displayedAnswer : thread.answer;
+            const isLoadingState = isCurrentlyFocused ? (streamState === "loading") : thread.isQuerying;
             const metrics = scrollMetrics[thread.id];
             
             // ANTI-BLANKING: Force active or newest thread to have immediate visibility block and clear state
@@ -1873,14 +2019,14 @@ export default function V2GuidedFlow({
                       className="flex flex-col gap-3"
                       style={{ pointerEvents: thread.isMinimized ? "none" : "auto" }}
                     >
-                      {themeTitle && (
+                      {currentTopic && (
                         <div className="flex items-start justify-between border-b border-[#27272A]/40 pb-2.5">
                           <div className="flex flex-col text-left min-w-0 font-sans">
                             <span className="text-[9px] uppercase font-mono tracking-widest text-[#2DD4BF] font-extrabold leading-none mb-1">
                               {index > 0 ? "Follow up question" : "DISCUSSION TOPIC"}
                             </span>
                             <span className="text-sm sm:text-base font-bold text-zinc-100 break-words whitespace-normal leading-tight">
-                              {themeTitle}
+                              {currentTopic}
                             </span>
                           </div>
                           <button
@@ -1890,11 +2036,11 @@ export default function V2GuidedFlow({
                               toggleFavorite(thread);
                             }}
                             className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 transition cursor-pointer flex items-center justify-center shrink-0 ml-2"
-                            title={isFavorited(thread.id, themeTitle) ? "Remove from Favorites" : "Add to Favorites"}
+                            title={isFavorited(thread.id, currentTopic) ? "Remove from Favorites" : "Add to Favorites"}
                           >
                             <Star 
                               className={`w-5 h-5 transition-all ${
-                                isFavorited(thread.id, themeTitle) 
+                                isFavorited(thread.id, currentTopic) 
                                   ? "fill-amber-400 text-amber-400" 
                                   : "text-zinc-500 hover:text-amber-400"
                               }`} 
@@ -1908,10 +2054,10 @@ export default function V2GuidedFlow({
                         id={`thread-answer-text-${thread.id}`}
                         className="text-zinc-200 text-sm sm:text-[15px] font-sans leading-relaxed break-words space-y-2 mt-1 px-1 focus:outline-none scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent v2-answer-scroll"
                       >
-                        {thread.isQuerying ? (
+                        {isLoadingState ? (
                           <QueryProgress percent={thread.progressPercent} phase={thread.progressPhase} />
                         ) : (
-                          <p className="whitespace-pre-line">{thread.answer}</p>
+                          <p className="whitespace-pre-line">{currentAnswer}</p>
                         )}
                       </div>
 

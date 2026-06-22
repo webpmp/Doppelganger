@@ -37,6 +37,7 @@ interface D3Node extends d3.SimulationNodeDatum {
   relationshipSummary?: string;
   doppelgangerId?: string;
   ownerId?: string;
+  isNew?: boolean;
 }
 
 interface D3Link extends d3.SimulationLinkDatum<D3Node> {
@@ -567,6 +568,7 @@ export default function KnowledgeGraphCanvas({
     const mapToD3Node = (n: any): D3Node => {
       const existing = prevNodesMap.get(n.id);
       const savedPos = nodePositions?.[n.id];
+      const isNewNode = !existing;
       return {
         id: n.id,
         label: n.label,
@@ -586,6 +588,7 @@ export default function KnowledgeGraphCanvas({
         vy: existing ? existing.vy : undefined,
         fx: savedPos ? savedPos.x : (existing ? existing.fx : undefined),
         fy: savedPos ? savedPos.y : (existing ? existing.fy : undefined),
+        isNew: isNewNode,
       };
     };
 
@@ -814,12 +817,13 @@ export default function KnowledgeGraphCanvas({
       .append("line")
       .attr("class", "graph-link")
       .attr("stroke", (d) => getLinkColor(d))
-      .attr("stroke-width", 2.0);
+      .attr("stroke-width", 2.0)
+      .style("opacity", 0);
 
     const link = linksEnter.merge(linksJoin as any);
 
-    // Apply link styles
-    link.style("opacity", (d: any) => {
+    // Apply link styles immediately to updated links
+    linksJoin.style("opacity", (d: any) => {
       if (workflowMode === 'v2') {
         if (citedNodeIds && citedNodeIds.length > 0) {
           const sId = typeof d.source === "object" ? d.source.id : d.source;
@@ -831,6 +835,22 @@ export default function KnowledgeGraphCanvas({
       }
       return 0.55;
     });
+
+    // Fade in entering links
+    linksEnter.transition()
+      .duration(600)
+      .style("opacity", (d: any) => {
+        if (workflowMode === 'v2') {
+          if (citedNodeIds && citedNodeIds.length > 0) {
+            const sId = typeof d.source === "object" ? d.source.id : d.source;
+            const tId = typeof d.target === "object" ? d.target.id : d.target;
+            const isCited = citedNodeIds.includes(sId) && citedNodeIds.includes(tId);
+            return isCited ? 0.75 : 0.35;
+          }
+          return 0.55;
+        }
+        return 0.55;
+      });
 
     // Standard D3 Nodes Join
     const nodesJoin = nodesG.selectAll<SVGGElement, D3Node>("g.node-group")
@@ -1000,7 +1020,24 @@ export default function KnowledgeGraphCanvas({
         ? (citedNodeIds.includes(d.id) ? 1.0 : 0.55)
         : 1.0;
       
-      group.style("opacity", targetOpacity);
+      if (d.isNew) {
+        group.style("opacity", 0)
+          .transition()
+          .duration(600)
+          .ease(d3.easeCubicOut)
+          .style("opacity", targetOpacity);
+
+        group.select(".node-circle")
+          .attr("transform", "scale(0.8)")
+          .transition()
+          .duration(600)
+          .ease(d3.easeCubicOut)
+          .attr("transform", "scale(1)");
+
+        d.isNew = false;
+      } else {
+        group.style("opacity", targetOpacity);
+      }
       group.style("pointer-events", "auto");
     });
 
