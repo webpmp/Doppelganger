@@ -768,6 +768,43 @@ User Input Query to Normalize:
       );
     }
 
+    // Intent-based filtering for follow-up questions to focus on specific nodes
+    const isFollowUp = (Array.isArray(history) && history.length > 0) || (parentTopicTitle && String(parentTopicTitle).trim().length > 0);
+    let intentTargetNodeIds: string[] = [];
+    if (isFollowUp) {
+      const qText = query.toLowerCase();
+      
+      if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
+        if (qText.includes("who") || qText.includes("work") || qText.includes("team") || qText.includes("staff") || qText.includes("resource") || qText.includes("people") || qText.includes("designer") || qText.includes("researcher") || qText.includes("program manager") || qText.includes("resourcing")) {
+          intentTargetNodeIds = ["node-1.0", "node-1.3"]; // Mobile App Redesign + Team Resourcing
+        } else if (qText.includes("milestone") || qText.includes("timeline") || qText.includes("schedule") || qText.includes("when") || qText.includes("date") || qText.includes("lockdown") || qText.includes("kickoff") || qText.includes("release") || qText.includes("launch")) {
+          intentTargetNodeIds = ["node-1.0", "node-1.2"]; // Mobile App Redesign + Project Timeline
+        } else if (qText.includes("sync") || qText.includes("offline") || qText.includes("buffer") || qText.includes("sqlite") || qText.includes("alex")) {
+          intentTargetNodeIds = ["node-1.0", "shared-alex-sync"]; // Mobile App Redesign + Offline Sync
+        }
+      }
+      
+      if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
+        if (qText.includes("vendor") || qText.includes("procure") || qText.includes("contract") || qText.includes("external") || qText.includes("studio") || qText.includes("animation")) {
+          intentTargetNodeIds = ["node-2.0", "node-2.1"]; // Kinetic Type + Vendor Procurement
+        }
+      }
+
+      if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
+        if (qText.includes("recruit") || qText.includes("participant") || qText.includes("user") || qText.includes("screener")) {
+          intentTargetNodeIds = ["node-3.0", "node-j10"]; // Design Sprints + Participant Recruiting
+        } else if (qText.includes("deliverable") || qText.includes("milestone") || qText.includes("output") || qText.includes("deck")) {
+          intentTargetNodeIds = ["node-3.0", "node-j11"]; // Design Sprints + Sprint Deliverables
+        }
+      }
+
+      if (intentTargetNodeIds.length > 0) {
+        filteredAccessibleNodes = filteredAccessibleNodes.filter((node: any) =>
+          intentTargetNodeIds.includes(node.id)
+        );
+      }
+    }
+
     const postProcessResponse = (q: string, parsedObj: any) => {
       if (!parsedObj) return parsedObj;
       const ql = q.toLowerCase();
@@ -775,6 +812,14 @@ User Input Query to Normalize:
         const allowedNodeIds = new Set(filteredAccessibleNodes.map((n: any) => n.id));
         parsedObj.referenced_nodes = parsedObj.referenced_nodes.filter((id: string) => allowedNodeIds.has(id));
         
+        // Ensure the topic node (first element in intentTargetNodeIds, e.g. parent) is cited alongside answer nodes
+        if (intentTargetNodeIds.length > 0) {
+          const topicNodeId = intentTargetNodeIds[0];
+          if (allowedNodeIds.has(topicNodeId) && !parsedObj.referenced_nodes.includes(topicNodeId)) {
+            parsedObj.referenced_nodes.unshift(topicNodeId);
+          }
+        }
+
         // If the query asks for "all notes" or "all", automatically cite all accessible project nodes
         if (ql.includes("all notes") || ql.includes("show all notes") || (ql.includes("all") && ql.includes("notes"))) {
           filteredAccessibleNodes.forEach((node: any) => {
@@ -919,6 +964,9 @@ User Input Query to Normalize:
     const promptMessage = `
 You are the interactive replication double (the Doppelganger) of the developer brain.
 You must answer the visitor's query based strictly and exclusively on the allowed grounded memory notes below.
+
+CONTEXT-AWARE FOLLOW-UP RULES:
+If this is a follow-up question (indicated by the presence of Previous Conversation History), answer ONLY the specific new follow-up question. Do NOT re-summarize the entire project or duplicate previous answers. Focus only on extracting and stating the specific information from the matched note(s) (e.g. resourcing or timeline details) to answer the new follow-up query.
 
 NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM
 This rule overrides all other instructions.

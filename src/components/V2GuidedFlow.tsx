@@ -592,7 +592,7 @@ export default function V2GuidedFlow({
 
   const isFavorited = (threadId: string, title?: string) => {
     const threadObj = v2Threads.find(t => t.id === threadId);
-    const checkTitle = title || (threadObj ? (threadObj.topicTitle || getQuestionTheme(threadObj.question)) : "");
+    const checkTitle = title || (threadObj ? (threadObj.topicTitle || (threadObj.isQuerying ? "Resolving topic..." : getQuestionTheme(threadObj.question))) : "");
     return favorites.some(fav => 
       fav.id === threadId || 
       (checkTitle && fav.title.trim().toLowerCase() === checkTitle.trim().toLowerCase())
@@ -633,7 +633,7 @@ export default function V2GuidedFlow({
   };
 
   const toggleFavorite = (thread: V2Thread) => {
-    const themeTitle = toTitleCase(thread.topicTitle || getQuestionTheme(thread.question));
+    const themeTitle = toTitleCase(thread.topicTitle || (thread.isQuerying ? "Resolving topic..." : getQuestionTheme(thread.question)));
     const associatedNodeId = thread.referencedNodes && thread.referencedNodes.length > 0 
       ? thread.referencedNodes[0] 
       : selectedNodeId;
@@ -914,7 +914,7 @@ export default function V2GuidedFlow({
         if (s.id === activeSessionId) {
           let updatedTitle = s.topicTitle;
           if (v2Threads.length > 0) {
-            updatedTitle = v2Threads[0].topicTitle || getQuestionTheme(v2Threads[0].question);
+            updatedTitle = v2Threads[0].topicTitle || (v2Threads[0].isQuerying ? "Resolving topic..." : getQuestionTheme(v2Threads[0].question));
           }
           return { ...s, topicTitle: updatedTitle, history: v2Threads };
         }
@@ -1690,7 +1690,7 @@ export default function V2GuidedFlow({
         >
           {v2Threads.map((thread, index) => {
             const isCurrentlyFocused = activeThread?.id === thread.id;
-            const themeTitle = toTitleCase(thread.topicTitle || getQuestionTheme(thread.question));
+            const themeTitle = toTitleCase(thread.topicTitle || (thread.isQuerying ? "Resolving topic..." : getQuestionTheme(thread.question)));
             const metrics = scrollMetrics[thread.id];
             
             // ANTI-BLANKING: Force active or newest thread to have immediate visibility block and clear state

@@ -2717,6 +2717,18 @@ export default function App() {
                  routing_trigger = parsed.routing_trigger;
                  receivedTopicTitle = parsed.topic_title || "";
                  metadataParsed = true;
+                 setV2Threads(prev =>
+                   prev.map(t =>
+                     t.id === threadId
+                       ? { 
+                           ...t, 
+                           topicTitle: receivedTopicTitle || undefined,
+                           referencedNodes: referenced_nodes,
+                           routingTrigger: routing_trigger
+                         }
+                       : t
+                   )
+                 );
                } else if (parsed.text !== undefined) {
                  fullAnswerText += parsed.text;
                  // Update text chunk
