@@ -1932,7 +1932,7 @@ export default function V2GuidedFlow({
                                 <img 
                                   src={contrPhotoUrl} 
                                   alt={contributorProf.name}
-                                  className="w-5 h-5 rounded object-cover border border-zinc-805 bg-zinc-950 cursor-pointer hover:ring-1 hover:ring-[#2DD4BF]/50 transition duration-150"
+                                  className="w-5 h-5 rounded object-cover border border-zinc-600 bg-zinc-950 cursor-pointer hover:ring-1 hover:ring-[#2DD4BF]/50 transition duration-150"
                                   referrerPolicy="no-referrer"
                                   onClick={(e) => {
                                     e.stopPropagation();
