@@ -242,7 +242,7 @@ function TypewriterFadingText({ text }: { text: string }) {
         clearInterval(interval);
         setIsTypingDone(true);
       }
-    }, 50);
+    }, 20);
     return () => clearInterval(interval);
   }, [text]);
 
@@ -260,7 +260,7 @@ function TypewriterFadingText({ text }: { text: string }) {
       className="text-xs font-sans text-zinc-500 py-1.5 font-semibold text-zinc-400 select-none"
       style={{ 
         opacity: isFading ? 0 : 1, 
-        transition: isFading ? 'opacity 20s linear' : 'none' 
+        transition: isFading ? 'opacity 10s linear' : 'none' 
       }}
     >
       {displayedText}
@@ -1849,7 +1849,7 @@ export default function V2GuidedFlow({
                       <div className="flex items-start justify-between border-b border-[#27272A]/40 pb-2.5">
                         <div className="flex flex-col text-left min-w-0 font-sans">
                           <span className="text-[9px] uppercase font-mono tracking-widest text-[#2DD4BF] font-extrabold leading-none mb-1">
-                            DISCUSSION TOPIC
+                            {index > 0 ? "Follow up question" : "DISCUSSION TOPIC"}
                           </span>
                           <span className="text-sm sm:text-base font-bold text-zinc-100 truncate leading-tight">
                             {themeTitle}
