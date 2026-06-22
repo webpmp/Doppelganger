@@ -299,6 +299,15 @@ export default function V2GuidedFlow({
 
   const [currentNodePositions, setCurrentNodePositions] = useState<{ [nodeId: string]: { x: number; y: number } } | null>(null);
 
+  const bypassSessionSyncRef = useRef(false);
+
+  const handleDoppelgangerClickFromCard = (handle: string) => {
+    bypassSessionSyncRef.current = true;
+    if (onSwitchProfile) {
+      onSwitchProfile(handle);
+    }
+  };
+
   // 1. EXTEND THE CORE SEATING MEMORY STATE
   // Tabbed sessions saved on local storage (shared across profiles for seamless switching)
   const [sessions, setSessions] = useState<V2Session[]>(() => {
@@ -836,6 +845,10 @@ export default function V2GuidedFlow({
 
   // Synchronise sessions and handle auto-creation/activation of doppelganger tabs when activeProfileHandle changes
   useEffect(() => {
+    if (bypassSessionSyncRef.current) {
+      bypassSessionSyncRef.current = false;
+      return;
+    }
     if (!activeProfileHandle) return;
     const pName = activeProfileHandle === "@chris.adkins" ? "Chris Adkins" :
                   activeProfileHandle === "@alex.morgan" ? "Alex Morgan" :
@@ -1026,31 +1039,14 @@ export default function V2GuidedFlow({
 
   // Dynamic filter lists using strict source isolation and structural pruning
   const { filteredNodes, filteredEdges } = useMemo(() => {
-    if (!activeThread || !graphState?.activeNodes) {
+    if (!graphState?.activeNodes) {
       return { filteredNodes: [], filteredEdges: [] };
     }
 
-    const refIds: string[] = [];
-    const seenRefs = new Set<string>();
-    v2Threads.forEach(t => {
-      if (t.referencedNodes) {
-        t.referencedNodes.forEach(id => {
-          if (!seenRefs.has(id)) {
-            seenRefs.add(id);
-            refIds.push(id);
-          }
-        });
-      }
-    });
-
-    // Get all valid allowed nodes (active, visible with unlocked keys)
+    // 1. Get all valid allowed nodes belonging strictly to the selected Doppelganger
     const allowedNodes = graphState.activeNodes.filter(node => {
       if (node.node_state !== "active") return false;
-      
-      // STRICT ISOLATION constraint: ONLY show nodes matching activeProfileHandle in pristine view (no questions asked yet)
-      if (v2Threads.length === 0 && node.doppelgangerHandle !== activeProfileHandle) {
-        return false;
-      }
+      if (node.doppelgangerHandle !== activeProfileHandle) return false;
 
       const isIsolated = node.isIsolated === true || node.visibility_status === "isolated_passphrase";
       if (isIsolated) {
@@ -1060,138 +1056,29 @@ export default function V2GuidedFlow({
       return true;
     });
 
-    if (refIds.length === 0 && v2Threads.length === 0) {
-      // Fallback: If refIds is empty (e.g. pristine chat with no responses yet), retain all valid allowed nodes
-      const allowedIds = new Set(allowedNodes.map(n => n.id));
-      const fallbackEdges = (graphState.edges || []).filter(edge => {
-        const sourceId = typeof edge.source === "object" ? (edge.source as any).id : edge.source;
-        const targetId = typeof edge.target === "object" ? (edge.target as any).id : edge.target;
-        return allowedIds.has(sourceId) && allowedIds.has(targetId);
-      });
-      return { filteredNodes: allowedNodes, filteredEdges: fallbackEdges };
-    }
+    const allowedNodeIds = new Set(allowedNodes.map(n => n.id));
 
-    const userQuestionsText = v2Threads.map(t => t.question || "").join(" ");
-    const normalizedQuestion = userQuestionsText.toUpperCase();
-    const rawCitedSet = new Set(refIds);
-
-    // 1. Stage 1: Determine the single target Level 1 Project Family context
-    // Scan the text to resolve which explicit Level 1 Project hub is requested
-    let activeL1Prefix: string | null = null;
-
-    if (normalizedQuestion.includes("KINETIC TYPE") || normalizedQuestion.includes("MOTION")) {
-      activeL1Prefix = "2"; // Lock to Kinetic Type Prototype namespace family
-    } else if (normalizedQuestion.includes("MOBILE APP") || normalizedQuestion.includes("REDESIGN")) {
-      activeL1Prefix = "1"; // Lock to Mobile App Redesign namespace family
-    } else if (normalizedQuestion.includes("GRAPHQL") || normalizedQuestion.includes("FEDERATED")) {
-      activeL1Prefix = "5"; // Example mapping code for Federated GraphQL Hub
-    }
-
-    // 2. Stage 2: Enforce Strict Structural Namespace Pruning
-    // First, find which explicitly cited nodes from allowedNodes belong to the active project family
-    const citedInFamily = allowedNodes.filter(node => {
-      let nodePrefix = "";
-      try {
-        const parts = node.id.split('-');
-        if (parts[1]) {
-          nodePrefix = parts[1].split('.')[0];
-        }
-      } catch (err) {}
-
-      if (activeL1Prefix && nodePrefix !== activeL1Prefix && !node.id.startsWith("shared")) {
-        return false;
-      }
-      return rawCitedSet.has(node.id);
-    });
-
-    const citedInFamilyIds = new Set(citedInFamily.map(n => n.id));
-    const strictNodesToRender = new Set<any>(citedInFamily);
-
-    // Traverse edges to find structural connections linked to the cited set within the allowed prefix family
+    // 2. Filter edges that connect allowed nodes
     const allEdges = graphState.edges || [];
-    allEdges.forEach(edge => {
+    const validatedEdges = allEdges.filter(edge => {
       const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
       const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
-
-      if (citedInFamilyIds.has(sourceId) || citedInFamilyIds.has(targetId)) {
-        const sourceNode = allowedNodes.find(n => n.id === sourceId);
-        const targetNode = allowedNodes.find(n => n.id === targetId);
-
-        if (sourceNode) {
-          let nodePrefix = "";
-          try {
-            const parts = sourceNode.id.split('-');
-            if (parts[1]) {
-              nodePrefix = parts[1].split('.')[0];
-            }
-          } catch (err) {}
-          if (!activeL1Prefix || nodePrefix === activeL1Prefix || sourceNode.id.startsWith("shared")) {
-            strictNodesToRender.add(sourceNode);
-          }
-        }
-
-        if (targetNode) {
-          let nodePrefix = "";
-          try {
-            const parts = targetNode.id.split('-');
-            if (parts[1]) {
-              nodePrefix = parts[1].split('.')[0];
-            }
-          } catch (err) {}
-          if (!activeL1Prefix || nodePrefix === activeL1Prefix || targetNode.id.startsWith("shared")) {
-            strictNodesToRender.add(targetNode);
-          }
-        }
-      }
+      return allowedNodeIds.has(sourceId) && allowedNodeIds.has(targetId);
     });
 
-    // Convert the unique Set back to a clean array format for the D3 simulation loop
-    const finalNodesArray = Array.from(strictNodesToRender);
-
-    // 3. Stage 3: Collect Valid Edge Paths Within the Locked Namespace
-    const finalNodeIdsSet = new Set(finalNodesArray.map(n => n.id));
-    const validatedEdgesArray = allEdges.filter(edge => {
+    // 3. Keep only nodes that have at least one connection (no orphans)
+    const connectedNodeIds = new Set<string>();
+    validatedEdges.forEach(edge => {
       const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
       const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
-      return finalNodeIdsSet.has(sourceId) && finalNodeIdsSet.has(targetId);
+      connectedNodeIds.add(sourceId);
+      connectedNodeIds.add(targetId);
     });
 
-    // 4. Stage 4: Final Verification Pass - retain only nodes that maintain real structural connection validity
-    // (This cleanly automatically ignores or drops unlinked standalone keyword matches)
-    const verifiedNodeIds = new Set<string>();
-    validatedEdgesArray.forEach(edge => {
-      const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
-      const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
-      verifiedNodeIds.add(sourceId);
-      verifiedNodeIds.add(targetId);
-    });
+    const finalNodes = allowedNodes.filter(node => connectedNodeIds.has(node.id));
 
-    // Ensure Level 1 root remains visible even if it's the solitary anchor point
-    const getLevelFromNode = (n: any): number => {
-      if (n.level !== undefined) {
-        if (typeof n.level === "number") return n.level;
-        if (n.level && typeof n.level === "object" && typeof n.level.value === "number") {
-          return n.level.value;
-        }
-      }
-      if (n.weight !== undefined) {
-        if (n.weight >= 2.5) return 1;
-        if (n.weight >= 1.5) return 2;
-        return 3;
-      }
-      return 3;
-    };
-
-    finalNodesArray.forEach(node => {
-      if (getLevelFromNode(node) === 1) {
-        verifiedNodeIds.add(node.id);
-      }
-    });
-
-    const finalCleanNodes = finalNodesArray.filter(n => verifiedNodeIds.has(n.id));
-
-    return { filteredNodes: finalCleanNodes, filteredEdges: validatedEdgesArray };
-  }, [activeThreadReferencedNodesStr, graphState?.activeNodes, graphState?.edges, unlockedTokens, activeThread?.id]);
+    return { filteredNodes: finalNodes, filteredEdges: validatedEdges };
+  }, [activeProfileHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens]);
 
   // Collapse thread helper
   const collapseAllThreads = () => {
@@ -1936,11 +1823,7 @@ export default function V2GuidedFlow({
                                   referrerPolicy="no-referrer"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (openDoppelgangerTab) {
-                                      openDoppelgangerTab(contributorProf.handle);
-                                    } else if (onSwitchProfile) {
-                                      onSwitchProfile(contributorProf.handle);
-                                    }
+                                    handleDoppelgangerClickFromCard(contributorProf.handle);
                                   }}
                                 />
                                 <div className="flex flex-col text-left font-sans">
@@ -1948,11 +1831,7 @@ export default function V2GuidedFlow({
                                     className="text-[10px] font-semibold text-zinc-200 leading-none cursor-pointer hover:text-[#2DD4BF] hover:underline transition duration-150"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      if (openDoppelgangerTab) {
-                                        openDoppelgangerTab(contributorProf.handle);
-                                      } else if (onSwitchProfile) {
-                                        onSwitchProfile(contributorProf.handle);
-                                      }
+                                      handleDoppelgangerClickFromCard(contributorProf.handle);
                                     }}
                                   >
                                     {contributorProf.name}
