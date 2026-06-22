@@ -683,31 +683,6 @@ export default function KnowledgeGraphCanvas({
       }))
       .force("x", d3.forceX<D3Node>()
         .x((d: any) => {
-          if (workflowMode === 'v2') {
-            const sidebarWidth = selectedNodeId ? 340 : 0;
-            const availableW = width - sidebarWidth;
-            const centerReserve = Math.min(800, availableW * 0.65);
-            const leftBoundary = (availableW - centerReserve) / 2;
-            const rightBoundary = (availableW + centerReserve) / 2;
-            
-            const leftNodes = d3Nodes.filter((_, i) => i % 2 === 0);
-            const rightNodes = d3Nodes.filter((_, i) => i % 2 !== 0);
-            
-            const isLeft = leftNodes.some(n => n.id === d.id);
-            if (isLeft) {
-              const localIdx = leftNodes.findIndex(n => n.id === d.id);
-              const step = (leftNodes.length > 1) ? (localIdx / (leftNodes.length - 1)) : 0.5;
-              const minX = 50; 
-              const maxX = Math.max(minX + 40, leftBoundary - 20);
-              return minX + step * (maxX - minX);
-            } else {
-              const localIdx = rightNodes.findIndex(n => n.id === d.id);
-              const step = (rightNodes.length > 1) ? (localIdx / (rightNodes.length - 1)) : 0.5;
-              const minX = rightBoundary + 20;
-              const maxX = Math.max(minX + 40, availableW - 60);
-              return minX + step * (maxX - minX);
-            }
-          }
           if (getNodeLevel(d) === 1) {
             if (d.id === expandedParentId) return width / 2;
             if (expandedParentId) {
@@ -725,7 +700,6 @@ export default function KnowledgeGraphCanvas({
           return width / 2;
         })
         .strength((d: any) => {
-          if (workflowMode === 'v2') return 0.85;
           if (getNodeLevel(d) === 1) {
             return d.id === expandedParentId ? 0.45 : 0.3;
           }
@@ -734,19 +708,6 @@ export default function KnowledgeGraphCanvas({
       )
       .force("y", d3.forceY<D3Node>()
         .y((d: any) => {
-          if (workflowMode === 'v2') {
-            const leftNodes = d3Nodes.filter((_, i) => i % 2 === 0);
-            const rightNodes = d3Nodes.filter((_, i) => i % 2 !== 0);
-            const isLeft = leftNodes.some(n => n.id === d.id);
-            const list = isLeft ? leftNodes : rightNodes;
-            const localIdx = list.findIndex(n => n.id === d.id);
-            const minY = height * 0.25;
-            const maxY = height * 0.75;
-            const step = (list.length > 1) ? (localIdx / (list.length - 1)) : 0.5;
-            const stagger = isLeft ? 0 : 0.08;
-            const finalStep = Math.min(1.0, Math.max(0.0, step + stagger));
-            return minY + finalStep * (maxY - minY);
-          }
           if (getNodeLevel(d) === 1) {
             if (d.id === expandedParentId) return height / 2;
             if (expandedParentId) {
@@ -764,7 +725,6 @@ export default function KnowledgeGraphCanvas({
           return height / 2;
         })
         .strength((d: any) => {
-          if (workflowMode === 'v2') return 0.85;
           if (getNodeLevel(d) === 1) {
             return d.id === expandedParentId ? 0.45 : 0.3;
           }
@@ -832,14 +792,15 @@ export default function KnowledgeGraphCanvas({
     const activeDoppelgangerIdChanged = prevActiveDoppelgangerId !== activeDoppelgangerId;
     (svgElement as any)._prevActiveDoppelgangerId = activeDoppelgangerId;
 
-    if (isFirstRender || activeDoppelgangerIdChanged) {
+    const prevWidth = (svgElement as any)._prevWidth || 0;
+    const prevHeight = (svgElement as any)._prevHeight || 0;
+    const sizeChanged = prevWidth !== width || prevHeight !== height;
+    (svgElement as any)._prevWidth = width;
+    (svgElement as any)._prevHeight = height;
+
+    if (isFirstRender || activeDoppelgangerIdChanged || sizeChanged) {
       hasInitialFitRef.current = true;
-      let fitTransform = d3.zoomIdentity;
-      if (activeDoppelgangerId && (window as any)._lastZoomByProfile?.[activeDoppelgangerId]) {
-        fitTransform = (window as any)._lastZoomByProfile[activeDoppelgangerId];
-      } else {
-        fitTransform = getFitTransform();
-      }
+      const fitTransform = getFitTransform();
       svgElement.call(zoom.transform, fitTransform);
     }
 
@@ -1054,11 +1015,10 @@ export default function KnowledgeGraphCanvas({
     // Tick Handler mapping node coordinates to transform transforms
     simulation.on("tick", () => {
       if (workflowMode === 'v2') {
-        const sidebarWidth = selectedNodeId ? 340 : 0;
-        const minX = 90;
-        const maxX = Math.max(minX + 40, width - sidebarWidth - 140);
-        const minY = 65;
-        const maxY = Math.max(minY + 40, height - 65);
+        const minX = 40;
+        const maxX = Math.max(minX + 40, width - 40);
+        const minY = 40;
+        const maxY = Math.max(minY + 40, height - 40);
 
         d3Nodes.forEach((d: any) => {
           if (d.x !== undefined) {
@@ -1159,7 +1119,54 @@ export default function KnowledgeGraphCanvas({
         simulationRef.current.stop();
       }
     };
-  }, [stagedNodes, stagedEdges, dimensions, expandedParentId, parentGroups, resetTrigger, citedNodeIds, workflowMode, activeDoppelgangerId, selectedNodeId, unlockedTokens]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stagedNodes, stagedEdges, dimensions, expandedParentId, parentGroups, resetTrigger, citedNodeIds, workflowMode, activeDoppelgangerId, unlockedTokens]);
+
+  // Update node selection styles dynamically when selectedNodeId changes, without recreating simulation
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svgElement = d3.select(svgRef.current);
+    
+    // Update outer ring display
+    svgElement.selectAll<SVGGElement, D3Node>("g.node-group").each(function (d) {
+      const isSelected = d.id === selectedNodeId;
+      const group = d3.select(this);
+      group.select(".node-outer-ring")
+        .style("display", isSelected ? "block" : "none");
+    });
+
+    // Update link lines start/end offset points to account for the selected node's radius
+    const getRadiusForLink = (nodeData: any) => {
+      const base = getParentRadius(nodeData);
+      return nodeData.id === selectedNodeId ? base + 5 : base;
+    };
+
+    svgElement.selectAll<SVGLineElement, D3Link>("line.graph-link").each(function (d: any) {
+      const sNode = d.source;
+      const tNode = d.target;
+      if (sNode && tNode && typeof sNode === 'object' && typeof tNode === 'object') {
+        const sNodeX = (sNode as any).x;
+        const sNodeY = (sNode as any).y;
+        const tNodeX = (tNode as any).x;
+        const tNodeY = (tNode as any).y;
+        
+        if (sNodeX !== undefined && sNodeY !== undefined && tNodeX !== undefined && tNodeY !== undefined) {
+          const dx = tNodeX - sNodeX;
+          const dy = tNodeY - sNodeY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 0) {
+            const r1 = getRadiusForLink(sNode);
+            const r2 = getRadiusForLink(tNode);
+            d3.select(this)
+              .attr("x1", sNodeX + (dx / dist) * r1)
+              .attr("y1", sNodeY + (dy / dist) * r1)
+              .attr("x2", tNodeX - (dx / dist) * r2)
+              .attr("y2", tNodeY - (dy / dist) * r2);
+          }
+        }
+      }
+    });
+  }, [selectedNodeId]);
 
   return (
     <div

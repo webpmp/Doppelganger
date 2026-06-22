@@ -298,11 +298,13 @@ export default function V2GuidedFlow({
   }
 
   const [currentNodePositions, setCurrentNodePositions] = useState<{ [nodeId: string]: { x: number; y: number } } | null>(null);
+  const [mapFilterMode, setMapFilterMode] = useState<'cited' | 'all'>('cited');
 
   const bypassSessionSyncRef = useRef(false);
 
   const handleDoppelgangerClickFromCard = (handle: string) => {
     bypassSessionSyncRef.current = true;
+    setMapFilterMode('all');
     if (onSwitchProfile) {
       onSwitchProfile(handle);
     }
@@ -583,6 +585,7 @@ export default function V2GuidedFlow({
   };
 
   const wrappedHandleV2Submit = async (e?: FormEvent, customText?: string) => {
+    setMapFilterMode('cited');
     await handleV2Submit(e, customText);
     setHeaderMode('topics');
   };
@@ -1032,10 +1035,79 @@ export default function V2GuidedFlow({
     return v2Threads.find(t => t.id === v2FocusedThreadId) || v2Threads[v2Threads.length - 1] || null;
   }, [v2Threads, v2FocusedThreadId]);
 
+  const isExplorationMode = useMemo(() => {
+    if (v2Threads.length === 0) return false;
+    const active = v2Threads[v2Threads.length - 1];
+    if (!active) return false;
+    const hasQuestion = !!active.question && active.question.trim().length > 0;
+    const hasAnswerOrLoading = !!active.answer || active.isQuerying;
+    const hasNodes = !!(graphState && graphState.activeNodes && graphState.activeNodes.length > 0);
+    return hasQuestion && hasAnswerOrLoading && hasNodes;
+  }, [v2Threads, graphState]);
+
   // Stabilize active thread referenced nodes as a primitive string to avoid D3 reset when minimizing/maximizing threads
   const activeThreadReferencedNodesStr = useMemo(() => {
     return JSON.stringify(activeThread?.referencedNodes || []);
   }, [activeThread?.id, activeThread?.referencedNodes]);
+
+  // Automatically find and include the Top-Level Project (Level 1) node of the active project component
+  const citedNodeIdsForCanvas = useMemo(() => {
+    if (!activeThread || !activeThread.referencedNodes || activeThread.referencedNodes.length === 0) {
+      return [];
+    }
+
+    const baseCited = [...activeThread.referencedNodes];
+    const allActiveNodes = graphState?.activeNodes || [];
+    const allEdges = graphState?.edges || [];
+
+    // Check if there is already a Level 1 / Top-level Project node cited
+    const hasLevel1Cited = baseCited.some(id => {
+      const node = allActiveNodes.find(n => n.id === id);
+      if (!node) return false;
+      const lvl = node.level !== undefined ? node.level : (node.weight >= 2.5 ? 1 : (node.weight >= 1.5 ? 2 : 3));
+      return lvl === 1;
+    });
+
+    if (hasLevel1Cited) {
+      return baseCited;
+    }
+
+    // Otherwise, find the Top-level Project node connected to any of the cited nodes
+    const visited = new Set<string>(baseCited);
+    const queue = [...baseCited];
+    let foundLevel1Id: string | null = null;
+
+    while (queue.length > 0) {
+      const currId = queue.shift()!;
+      const currNode = allActiveNodes.find(n => n.id === currId);
+      if (currNode) {
+        const lvl = currNode.level !== undefined ? currNode.level : (currNode.weight >= 2.5 ? 1 : (currNode.weight >= 1.5 ? 2 : 3));
+        if (lvl === 1) {
+          foundLevel1Id = currId;
+          break;
+        }
+      }
+
+      allEdges.forEach(edge => {
+        const sId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
+        const tId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
+
+        if (sId === currId && !visited.has(tId)) {
+          visited.add(tId);
+          queue.push(tId);
+        } else if (tId === currId && !visited.has(sId)) {
+          visited.add(sId);
+          queue.push(sId);
+        }
+      });
+    }
+
+    if (foundLevel1Id && !baseCited.includes(foundLevel1Id)) {
+      baseCited.push(foundLevel1Id);
+    }
+
+    return baseCited;
+  }, [activeThread?.id, activeThreadReferencedNodesStr, graphState?.activeNodes, graphState?.edges]);
 
   // Dynamic filter lists using strict source isolation and structural pruning
   const { filteredNodes, filteredEdges } = useMemo(() => {
@@ -1057,16 +1129,54 @@ export default function V2GuidedFlow({
     });
 
     const allowedNodeIds = new Set(allowedNodes.map(n => n.id));
-
-    // 2. Filter edges that connect allowed nodes
     const allEdges = graphState.edges || [];
+
+    // Filter down to nodes reachable via connected component from cited nodes, if cited mode is active
+    let reachableNodeIds = allowedNodeIds;
+    const citedList = activeThread?.referencedNodes || [];
+
+    if (mapFilterMode === 'cited' && citedList.length > 0) {
+      const visited = new Set<string>();
+      const queue: string[] = [];
+
+      // Initialize queue with cited nodes that exist in allowedNodes
+      citedList.forEach(id => {
+        if (allowedNodeIds.has(id)) {
+          queue.push(id);
+          visited.add(id);
+        }
+      });
+
+      // BFS traversal to discover connected nodes
+      while (queue.length > 0) {
+        const currId = queue.shift()!;
+        allEdges.forEach(edge => {
+          const sId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
+          const tId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
+          
+          if (sId === currId && allowedNodeIds.has(tId) && !visited.has(tId)) {
+            visited.add(tId);
+            queue.push(tId);
+          } else if (tId === currId && allowedNodeIds.has(sId) && !visited.has(sId)) {
+            visited.add(sId);
+            queue.push(sId);
+          }
+        });
+      }
+      reachableNodeIds = visited;
+    }
+
+    // 2. Filter nodes and edges based on the reachable set
+    const filteredAllowedNodes = allowedNodes.filter(n => reachableNodeIds.has(n.id));
+
     const validatedEdges = allEdges.filter(edge => {
       const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
       const targetId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
-      return allowedNodeIds.has(sourceId) && allowedNodeIds.has(targetId);
+      return reachableNodeIds.has(sourceId) && reachableNodeIds.has(targetId);
     });
 
-    // 3. Keep only nodes that have at least one connection (no orphans)
+    // 3. Keep only nodes that have at least one connection (no orphans),
+    // but ALWAYS keep cited nodes when in cited mode.
     const connectedNodeIds = new Set<string>();
     validatedEdges.forEach(edge => {
       const sourceId = typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
@@ -1075,10 +1185,15 @@ export default function V2GuidedFlow({
       connectedNodeIds.add(targetId);
     });
 
-    const finalNodes = allowedNodes.filter(node => connectedNodeIds.has(node.id));
+    const finalNodes = filteredAllowedNodes.filter(node => {
+      if (mapFilterMode === 'cited' && citedList.includes(node.id)) {
+        return true;
+      }
+      return connectedNodeIds.has(node.id);
+    });
 
     return { filteredNodes: finalNodes, filteredEdges: validatedEdges };
-  }, [activeProfileHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens]);
+  }, [activeProfileHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens, mapFilterMode, activeThreadReferencedNodesStr]);
 
   // Collapse thread helper
   const collapseAllThreads = () => {
@@ -1241,163 +1356,165 @@ export default function V2GuidedFlow({
       
       {/* 2. STRUCTURAL DOM REFIT: THE CONTROL SEPARATOR HEADER (NOW INDEPENDENT TABS TOUCHING THE DIVIDER LINE) */}
       {showBookmarksBar && (
-        <div className="z-25 w-full max-w-2.5xl mx-auto px-4 pt-6 pointer-events-auto shrink-0 flex flex-col">
-          <div className="thread-control-header flex flex-row justify-between items-center gap-4 w-full pb-0.5">
-            {/* LEFT BLOCK: Session Dynamic Tabs Array */}
-            <div className="header-left-group flex items-center gap-3 w-full relative">
-              <div className="relative shrink-0 border-r border-[#27272A] pr-3 h-4 flex items-center z-45">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsDropdownOpen(!isDropdownOpen);
-                  }}
-                  className="text-[10px] font-mono tracking-widest text-[#2DD4BF] font-extrabold select-none hover:text-white transition flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 focus:outline-none"
-                >
-                  <span>{headerMode === 'topics' ? "Topics" : "Favorites"}</span>
-                  <ChevronDown className={`w-3 h-3 text-[#2DD4BF] transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {isDropdownOpen && (
-                  <div className="absolute top-6 left-0 bg-[#141417] border border-[#27272A] rounded-xl shadow-2xl z-50 py-1.5 min-w-[130px]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeaderMode('topics');
-                        setIsDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-xs font-mono font-bold tracking-wider hover:bg-zinc-800 transition-colors duration-150 flex items-center justify-between ${
-                        headerMode === 'topics' ? "text-[#2DD4BF] bg-zinc-800/35" : "text-zinc-400"
-                      }`}
-                    >
-                      <span>Topics</span>
-                      {headerMode === 'topics' && <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]"></span>}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeaderMode('favorites');
-                        setIsDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-xs font-mono font-bold tracking-wider hover:bg-zinc-800 transition-colors duration-150 flex items-center justify-between ${
-                        headerMode === 'favorites' ? "text-[#2DD4BF] bg-zinc-800/35" : "text-zinc-400"
-                      }`}
-                    >
-                      <span>Favorites</span>
-                      {headerMode === 'favorites' && <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]"></span>}
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="session-tabs-deck flex items-end gap-1.5 select-none overflow-x-auto no-scrollbar">
-                {headerMode === 'topics' ? (
-                  sessions
-                    .filter(session => {
-                      // Only show tabs for topics that have active message history
-                      return session.history && session.history.length > 0;
-                    })
-                    .map(session => {
-                      const isSelected = session.id === activeSessionId;
-                      return (
-                        <div
-                          key={session.id}
-                          className="group relative flex items-center"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => switchActiveSessionRoute(session.id)}
-                            className={`session-tab-item px-3.5 py-1.5 rounded-t-xl text-xs font-sans transition-all duration-200 cursor-pointer flex items-center gap-2 border-t border-x border-[#27272A]/80 ${
-                              isSelected
-                                ? "bg-[#0C0C0E] text-[#2DD4BF] font-semibold"
-                                : "bg-[#141417]/40 text-zinc-500 hover:text-zinc-300 hover:bg-[#141417]/80"
-                            }`}
-                            style={{ marginBottom: "-1px" }}
-                          >
-                            <span className="truncate whitespace-nowrap max-w-[210px] sm:max-w-[320px] md:max-w-none">{toTitleCase(session.topicTitle)}</span>
-                            <span
-                              role="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                closeSessionRoute(session.id);
-                              }}
-                              className="p-0.5 rounded hover:bg-zinc-800 hover:text-red-400 transition"
-                              title="Close tab"
-                            >
-                              <X className="w-2.5 h-2.5" />
-                            </span>
-                          </button>
-                        </div>
-                      );
-                    })
-                ) : (
-                  favorites.length > 0 ? (
-                    favorites.map(fav => {
-                      const isSelected = activeSessionId === `restored-session-${fav.id}` || sessions.find(s => s.id === activeSessionId)?.history.some(t => t.id === fav.id);
-                      return (
-                        <div
-                          key={fav.id}
-                          className="group relative flex items-center"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleFavoriteTabClick(fav)}
-                            className={`session-tab-item px-3.5 py-1.5 rounded-t-xl text-xs font-sans transition-all duration-200 cursor-pointer flex items-center gap-2 border-t border-x border-[#27272A]/80 ${
-                              isSelected
-                                ? "bg-[#0C0C0E] text-[#2DD4BF] font-semibold"
-                                : "bg-[#141417]/40 text-zinc-500 hover:text-zinc-300 hover:bg-[#141417]/40"
-                            }`}
-                            style={{ marginBottom: "-1px" }}
-                          >
-                            <span className="truncate whitespace-nowrap max-w-[210px] sm:max-w-[320px] md:max-w-none">
-                              {toTitleCase(fav.title)}
-                            </span>
-                            <span
-                              role="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                removeFavorite(fav.id, fav.title);
-                              }}
-                              className="p-0.5 rounded hover:bg-zinc-800 hover:text-red-400 transition"
-                              title="Remove from favorites"
-                            >
-                              <X className="w-2.5 h-2.5" />
-                            </span>
-                          </button>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <TypewriterFadingText text="No favorite topics yet." />
-                  )
-                )}
-
-                {/* Persistent "+" Append Button for launching fresh blank states - ONLY IN TOPICS MODE */}
-                {headerMode === 'topics' && (
+        <div className="z-25 w-full pointer-events-auto shrink-0 flex flex-col pt-6">
+          <div className="w-full max-w-2.5xl mx-auto px-4 flex flex-col">
+            <div className="thread-control-header flex flex-row justify-between items-center gap-4 w-full pb-0.5">
+              {/* LEFT BLOCK: Session Dynamic Tabs Array */}
+              <div className="header-left-group flex items-center gap-3 w-full relative">
+                <div className="relative shrink-0 border-r border-[#27272A] pr-3 h-4 flex items-center z-45">
                   <button
                     type="button"
-                    onClick={spawnNewConversationSession}
-                    className="create-session-trigger px-3 py-1.5 rounded-t-xl border-t border-x border-dashed border-[#27272A]/80 hover:border-zinc-700 bg-transparent text-zinc-500 hover:text-white transition cursor-pointer text-xs font-bold"
-                    style={{ marginBottom: "-1px" }}
-                    title="Spawn new thread session"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsDropdownOpen(!isDropdownOpen);
+                    }}
+                    className="text-[10px] font-mono tracking-widest text-[#2DD4BF] font-extrabold select-none hover:text-white transition flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 focus:outline-none"
                   >
-                    +
+                    <span>{headerMode === 'topics' ? "Topics" : "Favorites"}</span>
+                    <ChevronDown className={`w-3 h-3 text-[#2DD4BF] transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`} />
                   </button>
-                )}
-              </div>
-            </div>
 
-            {/* RIGHT BLOCK: Neutral Gray Reset Button */}
-            <button
-              type="button"
-              onClick={clearAndResetCurrentSession}
-              className="reset-thread-action mb-1 px-3 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 hover:text-white border border-zinc-700 hover:border-zinc-500 text-[10px] font-mono font-bold text-zinc-300 transition flex items-center gap-1.5 cursor-pointer shadow-md select-none active:scale-95 duration-150 shrink-0"
-              title="Reset current thread session"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>RESET</span>
-            </button>
+                  {isDropdownOpen && (
+                    <div className="absolute top-6 left-0 bg-[#141417] border border-[#27272A] rounded-xl shadow-2xl z-50 py-1.5 min-w-[130px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderMode('topics');
+                          setIsDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-xs font-mono font-bold tracking-wider hover:bg-zinc-800 transition-colors duration-150 flex items-center justify-between ${
+                          headerMode === 'topics' ? "text-[#2DD4BF] bg-zinc-800/35" : "text-zinc-400"
+                        }`}
+                      >
+                        <span>Topics</span>
+                        {headerMode === 'topics' && <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]"></span>}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderMode('favorites');
+                          setIsDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-xs font-mono font-bold tracking-wider hover:bg-zinc-800 transition-colors duration-150 flex items-center justify-between ${
+                          headerMode === 'favorites' ? "text-[#2DD4BF] bg-zinc-800/35" : "text-zinc-400"
+                        }`}
+                      >
+                        <span>Favorites</span>
+                        {headerMode === 'favorites' && <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]"></span>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="session-tabs-deck flex items-end gap-1.5 select-none overflow-x-auto no-scrollbar">
+                  {headerMode === 'topics' ? (
+                    sessions
+                      .filter(session => {
+                        // Only show tabs for topics that have active message history
+                        return session.history && session.history.length > 0;
+                      })
+                      .map(session => {
+                        const isSelected = session.id === activeSessionId;
+                        return (
+                          <div
+                            key={session.id}
+                            className="group relative flex items-center"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => switchActiveSessionRoute(session.id)}
+                              className={`session-tab-item px-3.5 py-1.5 rounded-t-xl text-xs font-sans transition-all duration-200 cursor-pointer flex items-center gap-2 border-t border-x border-[#27272A]/80 ${
+                                isSelected
+                                  ? "bg-[#0C0C0E] text-[#2DD4BF] font-semibold"
+                                  : "bg-[#141417]/40 text-zinc-500 hover:text-zinc-300 hover:bg-[#141417]/80"
+                              }`}
+                              style={{ marginBottom: "-1px" }}
+                            >
+                              <span className="truncate whitespace-nowrap max-w-[210px] sm:max-w-[320px] md:max-w-none">{toTitleCase(session.topicTitle)}</span>
+                              <span
+                                role="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  closeSessionRoute(session.id);
+                                }}
+                                className="p-0.5 rounded hover:bg-zinc-800 hover:text-red-400 transition"
+                                title="Close tab"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })
+                  ) : (
+                    favorites.length > 0 ? (
+                      favorites.map(fav => {
+                        const isSelected = activeSessionId === `restored-session-${fav.id}` || sessions.find(s => s.id === activeSessionId)?.history.some(t => t.id === fav.id);
+                        return (
+                          <div
+                            key={fav.id}
+                            className="group relative flex items-center"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleFavoriteTabClick(fav)}
+                              className={`session-tab-item px-3.5 py-1.5 rounded-t-xl text-xs font-sans transition-all duration-200 cursor-pointer flex items-center gap-2 border-t border-x border-[#27272A]/80 ${
+                                isSelected
+                                  ? "bg-[#0C0C0E] text-[#2DD4BF] font-semibold"
+                                  : "bg-[#141417]/40 text-zinc-500 hover:text-zinc-300 hover:bg-[#141417]/40"
+                              }`}
+                              style={{ marginBottom: "-1px" }}
+                            >
+                              <span className="truncate whitespace-nowrap max-w-[210px] sm:max-w-[320px] md:max-w-none">
+                                {toTitleCase(fav.title)}
+                              </span>
+                              <span
+                                role="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  removeFavorite(fav.id, fav.title);
+                                }}
+                                className="p-0.5 rounded hover:bg-zinc-800 hover:text-red-400 transition"
+                                title="Remove from favorites"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <TypewriterFadingText text="No favorite topics yet." />
+                    )
+                  )}
+
+                  {/* Persistent "+" Append Button for launching fresh blank states - ONLY IN TOPICS MODE */}
+                  {headerMode === 'topics' && (
+                    <button
+                      type="button"
+                      onClick={spawnNewConversationSession}
+                      className="create-session-trigger px-3 py-1.5 rounded-t-xl border-t border-x border-dashed border-[#27272A]/80 hover:border-zinc-700 bg-transparent text-zinc-500 hover:text-white transition cursor-pointer text-xs font-bold"
+                      style={{ marginBottom: "-1px" }}
+                      title="Spawn new thread session"
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* RIGHT BLOCK: Neutral Gray Reset Button */}
+              <button
+                type="button"
+                onClick={clearAndResetCurrentSession}
+                className="reset-thread-action mb-1 px-3 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700 hover:text-white border border-zinc-700 hover:border-zinc-500 text-[10px] font-mono font-bold text-zinc-300 transition flex items-center gap-1.5 cursor-pointer shadow-md select-none active:scale-95 duration-150 shrink-0"
+                title="Reset current thread session"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>RESET</span>
+              </button>
+            </div>
           </div>
 
           {/* BOTTOM HORIZONTAL RULE: Solid Divider Line */}
@@ -1426,7 +1543,7 @@ export default function V2GuidedFlow({
             v2Threads.length > 0 
               ? "opacity-100 scale-100 pointer-events-auto blur-none block" 
               : "opacity-0 scale-95 pointer-events-none blur-xl invisible h-0 w-0 overflow-hidden"
-          }`}
+          } ${isExplorationMode ? "exploration-mode" : ""} ${selectedNode ? "has-sidebar" : ""}`}
           onClick={() => {
             collapseAllThreads();
           }}
@@ -1451,7 +1568,7 @@ export default function V2GuidedFlow({
               activeDoppelgangerId={activeProfileHandle}
               workflowMode="v2"
               systemHasNodes={!!(graphState && graphState.activeNodes && graphState.activeNodes.length > 0)}
-              citedNodeIds={activeThread ? activeThread.referencedNodes : []}
+              citedNodeIds={citedNodeIdsForCanvas}
               activeView="visitor"
             />
           </div>
@@ -1563,7 +1680,7 @@ export default function V2GuidedFlow({
       {v2Threads.length > 0 && (
         <div 
           id="v2-thread-overlay-container"
-          className="scrollable-message-stack no-scrollbar"
+          className={`scrollable-message-stack no-scrollbar ${isExplorationMode ? "exploration-mode" : ""}`}
           style={{
             overflowY: (v2Threads.length === 1) || (activeThread && activeThread.isMinimized) ? "hidden" : "auto"
           }}
@@ -1617,38 +1734,41 @@ export default function V2GuidedFlow({
               >
                 {/* 1. ASK QUESTION CARD */}
                 <div 
-                  onClick={() => toggleThreadMinimized(thread.id)}
-                  className="v2-ask-question-card w-full max-w-xl p-6 rounded-2xl text-white text-sm sm:text-[15px] font-sans flex flex-col gap-2 shadow-sm pointer-events-auto cursor-pointer relative !overflow-visible"
+                  onClick={() => !isExplorationMode && toggleThreadMinimized(thread.id)}
+                  className="v2-ask-question-card w-full max-w-xl p-6 rounded-2xl text-white text-sm sm:text-[15px] font-sans flex flex-col gap-2 shadow-sm pointer-events-auto relative !overflow-visible"
                   style={{ 
                     zIndex: 5,
-                    boxShadow: "0 6px 12px -3px rgba(0, 0, 0, 0.3), 0 2px 6px -2px rgba(0, 0, 0, 0.2)",
-                    background: "rgba(15, 23, 42, 0.90)",
-                    backdropFilter: "blur(16px)",
-                    WebkitBackdropFilter: "blur(16px)",
-                    borderColor: "rgba(255, 255, 255, 0.12)",
-                    borderWidth: "1px",
-                    borderStyle: "solid"
+                    boxShadow: isExplorationMode ? "none" : "0 6px 12px -3px rgba(0, 0, 0, 0.3), 0 2px 6px -2px rgba(0, 0, 0, 0.2)",
+                    background: isExplorationMode ? "transparent" : "rgba(15, 23, 42, 0.90)",
+                    backdropFilter: isExplorationMode ? "none" : "blur(16px)",
+                    WebkitBackdropFilter: isExplorationMode ? "none" : "blur(16px)",
+                    borderColor: isExplorationMode ? "transparent" : "rgba(255, 255, 255, 0.12)",
+                    borderWidth: isExplorationMode ? "0px" : "1px",
+                    borderStyle: "solid",
+                    cursor: isExplorationMode ? "default" : "pointer"
                   }}
                 >
                   <div className="flex items-center justify-between gap-3.5 w-full">
                     <div className="flex-1 min-w-0 font-semibold text-zinc-100 text-left">
                       {thread.question}
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleThreadMinimized(thread.id);
-                      }}
-                      className="w-8 h-8 rounded-lg bg-[#0c0c0e] hover:bg-zinc-800 border border-zinc-800 text-teal-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
-                      title={thread.isMinimized ? "Expand answer" : "Collapse answer"}
-                    >
-                      {thread.isMinimized ? (
-                        <ChevronDown className="w-4 h-4" />
-                      ) : (
-                        <ChevronUp className="w-4 h-4" />
-                      )}
-                    </button>
+                    {!isExplorationMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleThreadMinimized(thread.id);
+                        }}
+                        className="w-8 h-8 rounded-lg bg-[#0c0c0e] hover:bg-zinc-800 border border-zinc-800 text-teal-400 hover:text-white transition cursor-pointer flex items-center justify-center shrink-0"
+                        title={thread.isMinimized ? "Expand answer" : "Collapse answer"}
+                      >
+                        {thread.isMinimized ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronUp className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </div>
                   <span className="text-[10px] font-mono text-zinc-500 self-start">
                     {thread.timestamp}
@@ -1661,30 +1781,32 @@ export default function V2GuidedFlow({
                   style={{
                     marginTop: "0px", // Perfectly flush with bottom of question card for the 0px offset clipping boundary
                     zIndex: 4,
-                    clipPath: "inset(0px -200px -200px -200px)",
-                    WebkitClipPath: "inset(0px -200px -200px -200px)"
+                    clipPath: isExplorationMode ? "none" : "inset(0px -200px -200px -200px)",
+                    WebkitClipPath: isExplorationMode ? "none" : "inset(0px -200px -200px -200px)"
                   }}
                 >
                   {/* Upper spacer representing the 2px space between question card and vector path */}
-                  <div className="w-full shrink-0 !overflow-visible" style={{ height: "2px" }} />
+                  <div className="w-full shrink-0 !overflow-visible" style={{ height: isExplorationMode ? "0px" : "2px" }} />
 
                   {/* Connection Path Container */}
                   <div 
                     className="flex flex-col items-center pointer-events-none transition-opacity duration-300 shrink-0 !overflow-visible"
                     style={{
-                      opacity: thread.isMinimized ? 0 : 1,
-                      height: "6px",
+                      opacity: (thread.isMinimized && !isExplorationMode) ? 0 : 1,
+                      height: isExplorationMode ? "0px" : "6px",
+                      display: isExplorationMode ? "none" : "flex"
                     }}
                   >
                     <div className="w-0.5 h-1.5 bg-zinc-800"></div>
                   </div>
 
                   {/* Lower spacer representing the 2px space between connection path and answer card */}
-                  <div className="w-full shrink-0 !overflow-visible" style={{ height: "2px" }} />
+                  <div className="w-full shrink-0 !overflow-visible" style={{ height: isExplorationMode ? "0px" : "2px" }} />
 
                   {/* 3. AI ANSWER CARD (Floating Glassmorphic) */}
                   <div 
                     onClick={() => {
+                      if (isExplorationMode) return;
                       if (thread.isMinimized) {
                         toggleThreadMinimized(thread.id);
                       } else {
@@ -1693,17 +1815,23 @@ export default function V2GuidedFlow({
                     }}
                     className="v2-ai-answer-card w-full max-w-xl rounded-2xl cursor-pointer p-6 border shadow-2xl relative !overflow-visible"
                     style={{
-                      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-                      transform: thread.isMinimized ? "translateY(calc(-100% + 2px))" : "translateY(0)",
-                      opacity: thread.isMinimized ? 0.55 : 1,
+                      boxShadow: isExplorationMode ? "none" : "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                      transform: (thread.isMinimized && !isExplorationMode) ? "translateY(calc(-100% + 2px))" : "translateY(0)",
+                      opacity: (thread.isMinimized && !isExplorationMode) ? 0.55 : 1,
                       pointerEvents: "auto", // Ensure the card's 6px sticking-out edge remains interactive and clickable
                       transition: "transform 0.38s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease",
                       willChange: "transform, height",
                       zIndex: 4,
-                      cursor: "pointer"
+                      cursor: isExplorationMode ? "default" : "pointer",
+                      background: isExplorationMode ? "transparent" : "rgba(15, 23, 42, 0.90)",
+                      backdropFilter: isExplorationMode ? "none" : "blur(16px)",
+                      WebkitBackdropFilter: isExplorationMode ? "none" : "blur(16px)",
+                      borderColor: isExplorationMode ? "transparent" : "rgba(255, 255, 255, 0.12)",
+                      borderWidth: isExplorationMode ? "0px" : "1px",
+                      borderStyle: "solid"
                     }}
                   >
-                    {thread.isMinimized && (
+                    {!isExplorationMode && thread.isMinimized && (
                       <div 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1866,7 +1994,7 @@ export default function V2GuidedFlow({
 
       {/* FIXED BOTTOM REFINEMENT INPUT FIELD with contextually relevant Suggestion placeholder */}
       {v2Threads.length > 0 && (
-        <div className="v2-input-dock-panel">
+        <div className={`v2-input-dock-panel ${isExplorationMode ? "exploration-mode" : ""}`}>
           <div className="max-w-xl mx-auto relative flex items-center pointer-events-auto">
             <form 
               onSubmit={wrappedHandleV2Submit} 

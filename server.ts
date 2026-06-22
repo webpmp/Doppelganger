@@ -717,21 +717,29 @@ User Input Query to Normalize:
 
     // Match project-specific queries to restrict to project nodes (Level 1, 2, 3 nodes belonging to that project)
     let targetProjectNodes: string[] | null = null;
-    if (qLower.includes("mobile") || qLower.includes("redesign")) {
+
+    // Combine current query text with message history text to inherit context for follow-up questions
+    let combinedQueryText = qLower;
+    if (Array.isArray(history) && history.length > 0) {
+      const historyText = history.map((h: any) => `${h.question || ""} ${h.answer || ""}`).join(" ").toLowerCase();
+      combinedQueryText += " " + historyText;
+    }
+
+    if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
       targetProjectNodes = ["node-1.0", "node-1.2", "node-1.3", "shared-alex-sync"];
-    } else if (qLower.includes("kinetic") || qLower.includes("type") || qLower.includes("motion")) {
+    } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
       targetProjectNodes = ["node-2.0", "node-2.1"];
-    } else if (qLower.includes("design sprint") || qLower.includes("sprints planning") || qLower.includes("sprint planning")) {
+    } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
       targetProjectNodes = ["node-3.0", "node-j10", "node-j11"];
-    } else if (qLower.includes("branding")) {
+    } else if (combinedQueryText.includes("branding")) {
       targetProjectNodes = ["node-4.0", "node-j20"];
-    } else if (qLower.includes("platform developer") || qLower.includes("developer experience") || qLower.includes("cached layers")) {
+    } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
       targetProjectNodes = ["node-a10", "node-a11", "node-a12"];
-    } else if (qLower.includes("graphql") || qLower.includes("stitching") || qLower.includes("federated")) {
+    } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
       targetProjectNodes = ["node-a20", "node-a21"];
-    } else if (qLower.includes("aegis")) {
+    } else if (combinedQueryText.includes("aegis")) {
       targetProjectNodes = ["node-j30"];
-    } else if (qLower.includes("cobalt")) {
+    } else if (combinedQueryText.includes("cobalt")) {
       targetProjectNodes = ["node-a30"];
     }
 
@@ -743,10 +751,20 @@ User Input Query to Normalize:
 
     const postProcessResponse = (q: string, parsedObj: any) => {
       if (!parsedObj) return parsedObj;
+      const ql = q.toLowerCase();
       if (parsedObj.referenced_nodes) {
         const allowedNodeIds = new Set(filteredAccessibleNodes.map((n: any) => n.id));
         parsedObj.referenced_nodes = parsedObj.referenced_nodes.filter((id: string) => allowedNodeIds.has(id));
-        const ql = q.toLowerCase();
+        
+        // If the query asks for "all notes" or "all", automatically cite all accessible project nodes
+        if (ql.includes("all notes") || ql.includes("show all notes") || (ql.includes("all") && ql.includes("notes"))) {
+          filteredAccessibleNodes.forEach((node: any) => {
+            if (!parsedObj.referenced_nodes.includes(node.id)) {
+              parsedObj.referenced_nodes.push(node.id);
+            }
+          });
+        }
+        
         if ((ql.includes("mobile") || ql.includes("redesign")) && allowedNodeIds.has("shared-alex-sync")) {
           if (!parsedObj.referenced_nodes.includes("shared-alex-sync")) {
             parsedObj.referenced_nodes.push("shared-alex-sync");
@@ -868,7 +886,8 @@ User Input Query to Normalize:
 
     // Sort by descending final scores
     scoredNotes.sort((a, b) => b.score - a.score);
-    const limit = (query.toLowerCase().includes("design sprints planning") && query.toLowerCase().includes("all")) ? 12 : 8;
+    const ql = query.toLowerCase();
+    const limit = (ql.includes("all") || ql.includes("show all") || ql.includes("notes for")) ? 30 : 8;
     const topNotes = scoredNotes.slice(0, limit).map(item => item.note);
 
     // AI grounded prompt
@@ -954,6 +973,7 @@ Instructions:
 5. Identify which active node IDs from the allowed context were referenced in generating the answer.
 6. STRICT CONTEXT CLEANSING: Only reference node IDs if they are directly relevant to the specific project being queried. If the query is specifically about one project (e.g., "Kinetic Type Prototype" or "node-2" prefix), do NOT include unrelated project node IDs (e.g., "Mobile App Redesign" or "node-1" prefix nodes) in the "referenced_nodes" array, even if they share some generic word like "timeline", "study", or "procurement". Doing so will cause other projects to visually bleed into this query's session.
 7. Determine "routing_trigger": a boolean triggering true if the query matches a topic owned by another user's brain entirely (e.g. if the visitor asks for something completely outside of these concepts or projects, or mentions names of external entities/libraries we don't know about).
+8. If the visitor query asks for "all notes", "all information", or similar project-wide requests, ensure your response_text synthesizes the information from all the allowed memory blocks, and that you include all of their respective node IDs in the "referenced_nodes" array.
 
 Respond with valid JSON mapping the schema:
 {

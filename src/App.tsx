@@ -32,6 +32,13 @@ import KnowledgeGraphCanvas from "./components/KnowledgeGraphCanvas";
 import V2GuidedFlow from "./components/V2GuidedFlow";
 import { StructuralOutline } from "./components/StructuralOutline";
 
+const getFormattedTimestamp = (): string => {
+  const now = new Date();
+  const datePart = now.toLocaleDateString();
+  const timePart = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return `${datePart} ${timePart}`;
+};
+
 function DoppelgangerLogo({ className = "h-10 w-auto" }: { className?: string }) {
   return (
     <img 
@@ -2148,7 +2155,7 @@ export default function App() {
             id: `security-lock-${Date.now()}`,
             sender: "doug",
             text: "🔒 System auto-locked after 1 minute of inactivity. Your personal knowledge graph's privacy is protected.",
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: getFormattedTimestamp()
           }
         ]);
       }, 60000); // 1 minute of inactivity
@@ -2356,7 +2363,7 @@ export default function App() {
       id: "initial-msg",
       sender: "doug",
       text: "All systems are loaded! We added 3 sample projects to the map. Two are public, and one is hidden ('Project Aegis'). Try typing 'AEGIS-DECODE' in the passcode entry box to unlock the hidden project!",
-      timestamp: new Date().toLocaleTimeString()
+      timestamp: getFormattedTimestamp()
     };
     setChatMessages([initialMsg]);
     // Clear staging area
@@ -2391,7 +2398,7 @@ export default function App() {
           id: `unlock-${Date.now()}`,
           sender: "doug",
           text: `🔑 Code accepted! Under-development project '${token}' is now unlocked. You can see and select it on the project map.`,
-          timestamp: new Date().toLocaleTimeString()
+          timestamp: getFormattedTimestamp()
         }
       ]);
     }
@@ -2406,7 +2413,7 @@ export default function App() {
         id: `lock-${Date.now()}`,
         sender: "doug",
         text: `🔒 Access code '${token}' removed. The project is hidden again.`,
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: getFormattedTimestamp()
       }
     ]);
   };
@@ -2464,7 +2471,7 @@ export default function App() {
           id: `error-${Date.now()}`,
           sender: "doug",
           text: `❌ Error analyzing your journal: ${err.message || "An unexpected error occurred while analyzing the text."}`,
-          timestamp: new Date().toLocaleTimeString()
+          timestamp: getFormattedTimestamp()
         }
       ]);
     } finally {
@@ -2487,7 +2494,7 @@ export default function App() {
         id: `apply-${Date.now()}`,
         sender: "doug",
         text: `✅ Updates applied! Your project map is refreshed with the new projects and notes.`,
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: getFormattedTimestamp()
       }
     ]);
   };
@@ -2520,7 +2527,7 @@ export default function App() {
         id: visitorMsgId,
         sender: "visitor",
         text: query,
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: getFormattedTimestamp()
       }
     ]);
 
@@ -2560,7 +2567,7 @@ export default function App() {
           id: assistantMsgId,
           sender: "doug",
           text: "",
-          timestamp: new Date().toLocaleTimeString()
+          timestamp: getFormattedTimestamp()
         }
       ]);
 
@@ -2619,7 +2626,7 @@ export default function App() {
           id: `error-${Date.now()}`,
           sender: "doug",
           text: `⚠️ Query Synthesis Failure: ${err.message || "Failed to finalize grounded inference on local state arrays."}`,
-          timestamp: new Date().toLocaleTimeString()
+          timestamp: getFormattedTimestamp()
         }
       ]);
     } finally {
@@ -2645,7 +2652,7 @@ export default function App() {
       isQuerying: true,
       isMinimized: false,
       routingTrigger: false,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: getFormattedTimestamp(),
       ownerHandle: activeProfileHandle
     };
 
@@ -3386,7 +3393,7 @@ export default function App() {
             id: `unlock-${Date.now()}`,
             sender: "doug",
             text: `🔑 Passcode accepted! Project '${foundIsolatedNode.label}' has been unlocked and populated into the active knowledge space.`,
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: getFormattedTimestamp()
           }
         ]);
         setSearchVal("");
@@ -5786,7 +5793,7 @@ export default function App() {
                             id: `unlock-${Date.now()}`,
                             sender: "doug",
                             text: `🔑 Code accepted! Under-development project '${formatNodeLabel(passcodeNodeToUnlock.label)}' is now fully unlocked and integrated into the map scene.`,
-                            timestamp: new Date().toLocaleTimeString()
+                            timestamp: getFormattedTimestamp()
                           }
                         ]);
                       }
