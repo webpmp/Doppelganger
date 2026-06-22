@@ -618,7 +618,7 @@ export default function V2GuidedFlow({
 
   const isFavorited = (threadId: string, title?: string) => {
     const threadObj = v2Threads.find(t => t.id === threadId);
-    const checkTitle = title || (threadObj ? (threadObj.topicTitle || (threadObj.isQuerying ? "Resolving topic..." : getQuestionTheme(threadObj.question))) : "");
+    const checkTitle = title || (threadObj ? ((!threadObj.isQuerying && threadObj.topicTitle) ? threadObj.topicTitle : "") : "");
     return favorites.some(fav => 
       fav.id === threadId || 
       (checkTitle && fav.title.trim().toLowerCase() === checkTitle.trim().toLowerCase())
@@ -659,7 +659,7 @@ export default function V2GuidedFlow({
   };
 
   const toggleFavorite = (thread: V2Thread) => {
-    const themeTitle = toTitleCase(thread.topicTitle || (thread.isQuerying ? "Resolving topic..." : getQuestionTheme(thread.question)));
+    const themeTitle = (!thread.isQuerying && thread.topicTitle) ? toTitleCase(thread.topicTitle) : "";
     const associatedNodeId = thread.referencedNodes && thread.referencedNodes.length > 0 
       ? thread.referencedNodes[0] 
       : selectedNodeId;
@@ -940,7 +940,7 @@ export default function V2GuidedFlow({
         if (s.id === activeSessionId) {
           let updatedTitle = s.topicTitle;
           if (v2Threads.length > 0) {
-            updatedTitle = v2Threads[0].topicTitle || (v2Threads[0].isQuerying ? "Resolving topic..." : getQuestionTheme(v2Threads[0].question));
+            updatedTitle = (!v2Threads[0].isQuerying && v2Threads[0].topicTitle) ? v2Threads[0].topicTitle : "";
           }
           return { ...s, topicTitle: updatedTitle, history: v2Threads };
         }
@@ -1715,7 +1715,7 @@ export default function V2GuidedFlow({
         >
           {v2Threads.map((thread, index) => {
             const isCurrentlyFocused = activeThread?.id === thread.id;
-            const themeTitle = toTitleCase(thread.topicTitle || (thread.isQuerying ? "Resolving topic..." : getQuestionTheme(thread.question)));
+            const themeTitle = (!thread.isQuerying && thread.topicTitle) ? toTitleCase(thread.topicTitle) : "";
             const metrics = scrollMetrics[thread.id];
             
             // ANTI-BLANKING: Force active or newest thread to have immediate visibility block and clear state
@@ -1877,33 +1877,35 @@ export default function V2GuidedFlow({
                       className="flex flex-col gap-3"
                       style={{ pointerEvents: thread.isMinimized ? "none" : "auto" }}
                     >
-                      <div className="flex items-start justify-between border-b border-[#27272A]/40 pb-2.5">
-                        <div className="flex flex-col text-left min-w-0 font-sans">
-                          <span className="text-[9px] uppercase font-mono tracking-widest text-[#2DD4BF] font-extrabold leading-none mb-1">
-                            {index > 0 ? "Follow up question" : "DISCUSSION TOPIC"}
-                          </span>
-                          <span className="text-sm sm:text-base font-bold text-zinc-100 break-words whitespace-normal leading-tight">
-                            {themeTitle}
-                          </span>
+                      {themeTitle && (
+                        <div className="flex items-start justify-between border-b border-[#27272A]/40 pb-2.5">
+                          <div className="flex flex-col text-left min-w-0 font-sans">
+                            <span className="text-[9px] uppercase font-mono tracking-widest text-[#2DD4BF] font-extrabold leading-none mb-1">
+                              {index > 0 ? "Follow up question" : "DISCUSSION TOPIC"}
+                            </span>
+                            <span className="text-sm sm:text-base font-bold text-zinc-100 break-words whitespace-normal leading-tight">
+                              {themeTitle}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(thread);
+                            }}
+                            className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 transition cursor-pointer flex items-center justify-center shrink-0 ml-2"
+                            title={isFavorited(thread.id, themeTitle) ? "Remove from Favorites" : "Add to Favorites"}
+                          >
+                            <Star 
+                              className={`w-5 h-5 transition-all ${
+                                isFavorited(thread.id, themeTitle) 
+                                  ? "fill-amber-400 text-amber-400" 
+                                  : "text-zinc-500 hover:text-amber-400"
+                              }`} 
+                            />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(thread);
-                          }}
-                          className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 transition cursor-pointer flex items-center justify-center shrink-0 ml-2"
-                          title={isFavorited(thread.id, themeTitle) ? "Remove from Favorites" : "Add to Favorites"}
-                        >
-                          <Star 
-                            className={`w-5 h-5 transition-all ${
-                              isFavorited(thread.id, themeTitle) 
-                                ? "fill-amber-400 text-amber-400" 
-                                : "text-zinc-500 hover:text-amber-400"
-                            }`} 
-                          />
-                        </button>
-                      </div>
+                      )}
 
                       {/* Answer text block */}
                       <div 
