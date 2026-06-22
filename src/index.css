@@ -333,7 +333,7 @@ svg rect.bg-grid {
 }
 
 .v2-answer-scroll {
-  max-height: 220px !important;
-  overflow-y: auto !important;
-  padding-right: 4px !important;
+  max-height: none !important;
+  overflow-y: visible !important;
+  padding-right: 0 !important;
 }

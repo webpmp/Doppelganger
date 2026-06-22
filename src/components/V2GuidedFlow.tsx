@@ -1000,24 +1000,31 @@ export default function V2GuidedFlow({
     const scrollElement = document.getElementById("v2-thread-overlay-container");
     if (!scrollElement) return;
 
-    // 1. INSTANT SNAP (to force layout stabilization instantly and satisfy single pair isolation constraints)
     if (v2Threads.length <= 1) {
       scrollElement.scrollTop = 0;
-    } else {
-      scrollElement.scrollTop = (v2Threads.length - 1) * 550;
+      updateScrollMetrics();
+      return;
+    }
+
+    const activeId = activeThread?.id;
+    if (activeId) {
+      const activeEl = scrollElement.querySelector(`[data-thread-id="${activeId}"]`) as HTMLElement;
+      if (activeEl) {
+        scrollElement.scrollTop = activeEl.offsetTop - 10;
+      }
     }
     updateScrollMetrics();
 
     // 2. BACKUP SHIFT STABILIZER (to catch any deferred browser rendering/re-flow intervals)
     setTimeout(() => {
-      if (v2Threads.length <= 1) {
-        scrollElement.scrollTop = 0;
-      } else {
-        scrollElement.scrollTop = (v2Threads.length - 1) * 550;
+      if (activeId) {
+        const activeElSecond = scrollElement.querySelector(`[data-thread-id="${activeId}"]`) as HTMLElement;
+        if (activeElSecond) {
+          scrollElement.scrollTop = activeElSecond.offsetTop - 10;
+        }
       }
-      // Fire scroll metrics pass to align all scaling transformations
       updateScrollMetrics();
-    }, 20);
+    }, 50);
   };
 
   // Auto-scroll to end of threads on new queries and update layout
@@ -1678,7 +1685,7 @@ export default function V2GuidedFlow({
           id="v2-thread-overlay-container"
           className={`scrollable-message-stack no-scrollbar ${isExplorationMode ? "exploration-mode" : ""}`}
           style={{
-            overflowY: (v2Threads.length === 1) || (activeThread && activeThread.isMinimized) ? "hidden" : "auto"
+            overflowY: "auto"
           }}
         >
           {v2Threads.map((thread, index) => {
