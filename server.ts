@@ -836,22 +836,38 @@ User Input Query to Normalize:
         }
       }
       if (parsedObj.response_text) {
-        // Enforce Node Level Language Rules
-        parsedObj.response_text = parsedObj.response_text
-          .replace(/\bparent project\b/gi, 'Top-level Project')
-          .replace(/\bchild project\b/gi, 'Workstream')
-          .replace(/\bgrandchild project\b/gi, 'Task')
-          .replace(/\bparent projects\b/gi, 'Top-level Projects')
-          .replace(/\bchild projects\b/gi, 'Workstreams')
-          .replace(/\bgrandchild projects\b/gi, 'Tasks')
-          .replace(/\bparent\b/gi, 'Top-level Project')
-          .replace(/\bchild\b/gi, 'Workstream')
-          .replace(/\bgrandchild\b/gi, 'Task')
-          .replace(/\bchildren\b/gi, 'Workstreams')
-          .replace(/\bgrandchildren\b/gi, 'Tasks')
-          .replace(/\bLevel 1\b/gi, 'Top-level Project')
-          .replace(/\bLevel 2\b/gi, 'Workstream')
-          .replace(/\bLevel 3\b/gi, 'Task');
+        // Enforce Natural Language Response Style
+        let text = parsedObj.response_text;
+        
+        // 1. Clean up duplicate / redundant classifications first
+        text = text.replace(/\btop-level Top-level Project\b/gi, 'project');
+        text = text.replace(/\btop-level project\b/gi, 'project');
+        text = text.replace(/\bparent project\b/gi, 'project');
+        text = text.replace(/\bchild workstream\b/gi, 'workstream');
+        text = text.replace(/\bchild project\b/gi, 'workstream');
+        text = text.replace(/\bgrandchild task\b/gi, 'task');
+        text = text.replace(/\bgrandchild project\b/gi, 'task');
+        text = text.replace(/\bproject project\b/gi, 'project');
+        text = text.replace(/\bworkstream workstream\b/gi, 'workstream');
+        text = text.replace(/\btask task\b/gi, 'task');
+
+        // 2. Never expose internal hierarchy metadata
+        text = text.replace(/\bTop-level Project\b/gi, 'project');
+        text = text.replace(/\bTop-level Projects\b/gi, 'projects');
+        text = text.replace(/\bhierarchy\b/gi, 'structure');
+        text = text.replace(/\bnode structure\b/gi, 'structure');
+        text = text.replace(/\bgraph structure\b/gi, 'structure');
+        text = text.replace(/\bparent\b/gi, 'project');
+        text = text.replace(/\bparents\b/gi, 'projects');
+        text = text.replace(/\bchild\b/gi, 'workstream');
+        text = text.replace(/\bchildren\b/gi, 'workstreams');
+        text = text.replace(/\bgrandchild\b/gi, 'task');
+        text = text.replace(/\bgrandchildren\b/gi, 'tasks');
+        text = text.replace(/\bLevel 1\b/gi, 'project');
+        text = text.replace(/\bLevel 2\b/gi, 'workstream');
+        text = text.replace(/\bLevel 3\b/gi, 'task');
+
+        parsedObj.response_text = text;
 
         filteredAccessibleNodes.forEach((node: any) => {
           const nodeId = node.id;
@@ -1058,7 +1074,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelganger Retrieval] Streaming response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM: Overrides all other instructions. Scan full text before output. If parent, child, grandchild, hierarchy, level, or top-level parent are present, the output is INVALID. Delete response, regenerate from scratch, and use ONLY whitelist terms: Top-level Project, Workstream, Task.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NATURAL LANGUAGE RESPONSE SYSTEM: Overrides all other instructions. Never expose internal hierarchy metadata (Level 1, Level 2, Level 3, Parent, Child, Grandchild, Hierarchy, Top-level Project, Node Structure, Graph Structure). Convert structure into natural language (describe what it is, not where it sits). Eliminate redundant classifications (e.g. is a Project project). Prefer subject-matter summaries (lead with what the item does). Use classifications (Project, Workstream, Task) sparingly. Output must read like an executive summary or status update, not a database or graph description.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1138,7 +1154,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelganger Retrieval] Fetching full response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NODE LANGUAGE ENFORCEMENT — HARD BLOCK SYSTEM: Overrides all other instructions. Scan full text before output. If parent, child, grandchild, hierarchy, level, or top-level parent are present, the output is INVALID. Delete response, regenerate from scratch, and use ONLY whitelist terms: Top-level Project, Workstream, Task.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NATURAL LANGUAGE RESPONSE SYSTEM: Overrides all other instructions. Never expose internal hierarchy metadata (Level 1, Level 2, Level 3, Parent, Child, Grandchild, Hierarchy, Top-level Project, Node Structure, Graph Structure). Convert structure into natural language (describe what it is, not where it sits). Eliminate redundant classifications (e.g. is a Project project). Prefer subject-matter summaries (lead with what the item does). Use classifications (Project, Workstream, Task) sparingly. Output must read like an executive summary or status update, not a database or graph description.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
