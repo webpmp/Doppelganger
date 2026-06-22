@@ -268,6 +268,32 @@ function TypewriterFadingText({ text }: { text: string }) {
   );
 }
 
+const QueryProgress = () => {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 99) {
+          clearInterval(interval);
+          return 99;
+        }
+        const inc = Math.floor(Math.random() * 8) + 3;
+        return Math.min(99, prev + inc);
+      });
+    }, 80);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 text-zinc-500 font-mono text-[10px] py-1">
+      <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse"></span>
+      <span>[{progress}% complete] searching notes</span>
+    </div>
+  );
+};
+
 export default function V2GuidedFlow({
   graphState,
   selectedNodeId,
@@ -1885,11 +1911,8 @@ export default function V2GuidedFlow({
                         id={`thread-answer-text-${thread.id}`}
                         className="text-zinc-200 text-sm sm:text-[15px] font-sans leading-relaxed break-words space-y-2 mt-1 px-1 focus:outline-none scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent v2-answer-scroll"
                       >
-                        {thread.isQuerying && (!thread.answer || thread.answer === "Searching notes and synthesizing response block from accessible nodes...") ? (
-                          <div className="flex items-center gap-2 text-zinc-500 font-mono text-[10px] py-1">
-                            <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse"></span>
-                            Searching notes...
-                          </div>
+                        {thread.isQuerying && (!thread.answer || thread.answer.startsWith("Searching notes")) ? (
+                          <QueryProgress />
                         ) : (
                           <p className="whitespace-pre-line">{thread.answer}</p>
                         )}
