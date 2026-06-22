@@ -1264,7 +1264,11 @@ export default function V2GuidedFlow({
         setStreamState("loading");
         setDisplayedTopic("");
         setDisplayedAnswer("");
-        setNodeRevealStage(0);
+        if (v2Threads.length <= 1) {
+          setNodeRevealStage(0);
+        } else {
+          setNodeRevealStage(3);
+        }
       } else {
         setStreamState("completed");
         setDisplayedTopic(rawTopicTitle);
@@ -1272,7 +1276,7 @@ export default function V2GuidedFlow({
         setNodeRevealStage(3);
       }
     }
-  }, [activeThreadId, isQuerying, rawTopicTitle, rawAnswerText]);
+  }, [activeThreadId, isQuerying, rawTopicTitle, rawAnswerText, v2Threads.length]);
 
   useEffect(() => {
     if (streamState === "loading") {
@@ -1292,7 +1296,11 @@ export default function V2GuidedFlow({
         if (currentWordIndex > words.length) {
           clearInterval(interval);
           setStreamState("answer-streaming");
-          setNodeRevealStage(1);
+          if (v2Threads.length <= 1) {
+            setNodeRevealStage(1);
+          } else {
+            setNodeRevealStage(3);
+          }
         } else {
           setDisplayedTopic(words.slice(0, currentWordIndex).join(" "));
         }
