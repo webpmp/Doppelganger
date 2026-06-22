@@ -265,7 +265,7 @@ svg rect.bg-grid {
   height: calc(100vh - 100px) !important;
   max-height: none !important;
   overflow-y: auto !important;
-  padding: 16px !important;
+  padding: 16px 16px 500px 16px !important;
   background-color: rgba(20, 20, 23, 0.95) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
   z-index: 30 !important;
