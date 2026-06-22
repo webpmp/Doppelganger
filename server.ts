@@ -524,6 +524,16 @@ app.post("/api/visitor-query", async (req, res) => {
       return res.status(400).json({ error: "query is required." });
     }
 
+    const streamMode = req.headers["accept"] === "text/event-stream" || req.body.stream === true;
+    if (streamMode) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders?.();
+      res.write(`data: ${JSON.stringify({ type: "progress", percent: 5, phase: "Initializing query" })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "progress", percent: 15, phase: "Resolving topic" })}\n\n`);
+    }
+
     // Dedicated Topic Title Generator layer
     let topicTitle = "";
     try {
@@ -932,6 +942,10 @@ User Input Query to Normalize:
       }
     });
 
+    if (streamMode) {
+      res.write(`data: ${JSON.stringify({ type: "progress", percent: 35, phase: "Searching notes" })}\n\n`);
+    }
+
     // Semantic Vector Query retrieval helper execution
     let queryEmbedding: number[] | null = null;
     try {
@@ -954,6 +968,9 @@ User Input Query to Normalize:
     // Scoring via Hybrid (Cosine Vector Similarity + Keyword Boosts)
     const keywordBaseline = performKeywordSweep(accessibleNotes, query, accessibleNodes, accessibleNotes.length);
     const keywordNodeIds = new Set(keywordBaseline.map((m: any) => m.content));
+    if (streamMode) {
+      res.write(`data: ${JSON.stringify({ type: "progress", percent: 55, phase: "Mapping relevant nodes" })}\n\n`);
+    }
 
     const scoredNotes = accessibleNotes.map((note: any) => {
       let score = 0;
@@ -1081,10 +1098,8 @@ Respond with valid JSON mapping the schema:
 }
 `;
 
-    // Supporting both streaming and full JSON payload depending on client intent
-    const streamMode = req.headers["accept"] === "text/event-stream" || req.body.stream === true;
-
     if (streamMode) {
+      res.write(`data: ${JSON.stringify({ type: "progress", percent: 75, phase: "Synthesizing answer" })}\n\n`);
       let parsed: any;
       try {
         console.log(`[Doppelganger Retrieval] Streaming response via active provider: ${config.provider}`);
@@ -1134,12 +1149,14 @@ Respond with valid JSON mapping the schema:
         };
       }
 
+      if (streamMode) {
+        res.write(`data: ${JSON.stringify({ type: "progress", percent: 90, phase: "Formatting response" })}\n\n`);
+      }
       parsed = postProcessResponse(query, parsed);
 
-      // Set up SSE headers
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
+      if (streamMode) {
+        res.write(`data: ${JSON.stringify({ type: "progress", percent: 95, phase: "Finalizing output" })}\n\n`);
+      }
 
       // Send metadata immediately
       res.write(`data: ${JSON.stringify({ 

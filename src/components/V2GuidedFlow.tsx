@@ -77,6 +77,8 @@ interface V2Thread {
   timestamp: string;
   ownerHandle?: string;
   topicTitle?: string;
+  progressPercent?: number;
+  progressPhase?: string;
 }
 
 interface V2Session {
@@ -268,28 +270,22 @@ function TypewriterFadingText({ text }: { text: string }) {
   );
 }
 
-const QueryProgress = () => {
-  const [progress, setProgress] = useState(0);
+const QueryProgress = ({ percent, phase }: { percent?: number; phase?: string }) => {
+  const [maxProgress, setMaxProgress] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 99) {
-          clearInterval(interval);
-          return 99;
-        }
-        const inc = Math.floor(Math.random() * 8) + 3;
-        return Math.min(99, prev + inc);
-      });
-    }, 80);
+    if (percent !== undefined && percent > maxProgress) {
+      setMaxProgress(percent);
+    }
+  }, [percent, maxProgress]);
 
-    return () => clearInterval(interval);
-  }, []);
+  const displayPercent = percent !== undefined ? Math.max(percent, maxProgress) : maxProgress;
+  const displayPhase = phase || "Processing request";
 
   return (
     <div className="flex items-center gap-2 text-zinc-500 font-mono text-[10px] py-1">
       <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse"></span>
-      <span>[{progress}% complete] searching notes</span>
+      <span>{displayPercent}% — {displayPhase}</span>
     </div>
   );
 };
@@ -1912,8 +1908,8 @@ export default function V2GuidedFlow({
                         id={`thread-answer-text-${thread.id}`}
                         className="text-zinc-200 text-sm sm:text-[15px] font-sans leading-relaxed break-words space-y-2 mt-1 px-1 focus:outline-none scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent v2-answer-scroll"
                       >
-                        {thread.isQuerying && (!thread.answer || thread.answer.startsWith("Searching notes")) ? (
-                          <QueryProgress />
+                        {thread.isQuerying ? (
+                          <QueryProgress percent={thread.progressPercent} phase={thread.progressPhase} />
                         ) : (
                           <p className="whitespace-pre-line">{thread.answer}</p>
                         )}

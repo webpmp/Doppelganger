@@ -2653,7 +2653,9 @@ export default function App() {
       isMinimized: false,
       routingTrigger: false,
       timestamp: getFormattedTimestamp(),
-      ownerHandle: activeProfileHandle
+      ownerHandle: activeProfileHandle,
+      progressPercent: 0,
+      progressPhase: "Initializing query"
     };
 
     setV2Threads(prev => [
@@ -2712,7 +2714,19 @@ export default function App() {
 
             try {
                const parsed = JSON.parse(jsonText);
-               if (!metadataParsed && parsed.referenced_nodes !== undefined) {
+               if (parsed.type === "progress") {
+                 setV2Threads(prev =>
+                   prev.map(t =>
+                     t.id === threadId
+                       ? { 
+                           ...t, 
+                           progressPercent: parsed.percent,
+                           progressPhase: parsed.phase
+                         }
+                       : t
+                   )
+                 );
+               } else if (!metadataParsed && parsed.referenced_nodes !== undefined) {
                  referenced_nodes = parsed.referenced_nodes;
                  routing_trigger = parsed.routing_trigger;
                  receivedTopicTitle = parsed.topic_title || "";
