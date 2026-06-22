@@ -13,6 +13,16 @@
   --node-connection-color: #52525b;
 }
 
+html,
+body,
+#root {
+  overflow: hidden !important;
+  height: 100vh !important;
+  width: 100vw !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
 :root {
   --node-connection-color: #52525b;
 }
