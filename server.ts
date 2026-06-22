@@ -529,19 +529,30 @@ app.post("/api/visitor-query", async (req, res) => {
     try {
       let titlePrompt = "";
       if (parentTopicTitle && String(parentTopicTitle).trim().length > 0) {
+        const sanitizedParentTopic = String(parentTopicTitle)
+          .replace(/\b(Notes|Note|Node|Internal|Dataset|Labels)\b/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
         titlePrompt = `Feature: Context-Aware Follow-Up Discussion Topic Title Normalization
 
 Generate a context-aware title that combines the active discussion topic context with the user's follow-up question intent.
 
-Active Discussion Topic: "${parentTopicTitle}"
+Active Discussion Topic: "${sanitizedParentTopic}"
 User's Follow-up Question: "${query}"
 
 Guidelines:
-1. Return a clear, human-readable title that combines both the active topic and the follow-up intent.
-2. Pronouns (it, this, that, project, initiative) must NEVER appear in the title. Replace them with the actual discussion topic name (e.g. if follow-up is "Who is working on it?", output "Resources Working on Mobile App Redesign").
-3. Keep the title concise (3–8 words preferred) and grammatically correct.
-4. Do NOT output vague titles like "Resource In Progress", "Active Work", "Current Status", "Project Details", or "Team Information".
-5. Return ONLY the cleaned discussion topic title. No explanations, no markdown, no quotes, and no metadata.
+1. Core Rule: Follow-up question titles must reference the active discussion topic, not the specific note name being queried.
+2. Title Context Priority: Always prefer broader topic-level clarity (e.g., "${sanitizedParentTopic}") over specific note-level naming (e.g., do NOT use "Team Resourcing", "Timeline", etc. as the main subject).
+3. Title Construction Rule: Format as [Intent Phrase] + [Active Discussion Topic] (e.g. "Resources Working on ${sanitizedParentTopic}", "${sanitizedParentTopic} Timeline and Milestones").
+4. Strip Note Labels: Never include dataset names, internal labels, appended suffixes like "Notes", "Note", "Node", or raw node identifiers in the final title.
+5. Intent Normalization Rules:
+   - "who is working on it / staffing / resources" -> "Resources Working on ${sanitizedParentTopic}"
+   - "what are the milestones / timeline / schedule" -> "${sanitizedParentTopic} Timeline and Milestones"
+   - "what is included / status / overview" -> "Overview of ${sanitizedParentTopic}"
+   - "what dependencies exist / related work" -> "${sanitizedParentTopic} Dependencies and Related Workstreams"
+6. Do NOT output vague titles like "Resource In Progress", "Active Work", "Current Status", "Project Details", or "Team Information".
+7. Return ONLY the cleaned discussion topic title. No explanations, no markdown, no quotes, and no metadata.
 
 Output:`;
       } else {
@@ -676,6 +687,10 @@ User Input Query to Normalize:
         systemInstruction: "You are a Topic Title Normalizer. Return ONLY the cleaned discussion topic title phrase. No explanations, no markdown lists, no wrapping quotes, and no metadata.",
       });
       topicTitle = titleResponse.trim().replace(/^["'\*•\s]+|["'\*•\s]+$/g, "");
+      topicTitle = topicTitle
+        .replace(/\b(Notes|Note|Node|Internal|Dataset|Labels)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
     } catch (titleErr) {
       console.warn("Failed to generate normalized topic title:", titleErr);
     }
