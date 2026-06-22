@@ -1716,7 +1716,10 @@ export default function V2GuidedFlow({
               <div 
                 key={thread.id} 
                 data-thread-id={thread.id}
-                className="thread-turn-container group flex flex-col items-center gap-0 pointer-events-none origin-bottom !overflow-visible"
+                onClick={() => {
+                  setV2FocusedThreadId(thread.id);
+                }}
+                className={`thread-turn-container group flex flex-col items-center gap-0 pointer-events-auto origin-bottom !overflow-visible cursor-pointer ${isCurrentlyFocused ? "is-focused" : ""}`}
                 style={{
                   position: "absolute",
                   top: "5px",

@@ -303,9 +303,18 @@ svg rect.bg-grid {
   opacity: 1 !important;
   display: flex !important;
   visibility: visible !important;
-  margin-bottom: 0 !important;
-  padding-bottom: 0 !important;
+  margin-bottom: 12px !important;
+  padding: 16px !important;
   gap: 12px !important;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  transition: background-color 0.25s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.25s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.scrollable-message-stack.exploration-mode .thread-turn-container.is-focused {
+  background: rgba(45, 212, 191, 0.05) !important;
+  border-color: rgba(45, 212, 191, 0.2) !important;
 }
 
 .scrollable-message-stack.exploration-mode .v2-ask-question-card {

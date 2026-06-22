@@ -2678,7 +2678,8 @@ export default function App() {
           history: v2Threads.map(t => ({
             question: t.question,
             answer: t.answer
-          }))
+          })),
+          parentTopicTitle: activeThread?.topicTitle || ""
         })
       });
 

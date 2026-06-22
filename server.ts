@@ -516,7 +516,7 @@ Respond with valid JSON mapping the schema exactly.
 // ROUTE 2: Grounded retrieval search and chat answering (with Real Hybrid Vector retrieves)
 app.post("/api/visitor-query", async (req, res) => {
   try {
-    const { state, query, unlockedTokens, history } = req.body;
+    const { state, query, unlockedTokens, history, parentTopicTitle } = req.body;
     const config = getRequestAIConfig(req.body);
     const aiProvider = new AIProvider(config);
 
@@ -527,7 +527,25 @@ app.post("/api/visitor-query", async (req, res) => {
     // Dedicated Topic Title Generator layer
     let topicTitle = "";
     try {
-      const titlePrompt = `Feature: Discussion Topic Title Normalization
+      let titlePrompt = "";
+      if (parentTopicTitle && String(parentTopicTitle).trim().length > 0) {
+        titlePrompt = `Feature: Context-Aware Follow-Up Discussion Topic Title Normalization
+
+Generate a context-aware title that combines the active discussion topic context with the user's follow-up question intent.
+
+Active Discussion Topic: "${parentTopicTitle}"
+User's Follow-up Question: "${query}"
+
+Guidelines:
+1. Return a clear, human-readable title that combines both the active topic and the follow-up intent.
+2. Pronouns (it, this, that, project, initiative) must NEVER appear in the title. Replace them with the actual discussion topic name (e.g. if follow-up is "Who is working on it?", output "Resources Working on Mobile App Redesign").
+3. Keep the title concise (3–8 words preferred) and grammatically correct.
+4. Do NOT output vague titles like "Resource In Progress", "Active Work", "Current Status", "Project Details", or "Team Information".
+5. Return ONLY the cleaned discussion topic title. No explanations, no markdown, no quotes, and no metadata.
+
+Output:`;
+      } else {
+        titlePrompt = `Feature: Discussion Topic Title Normalization
 
 All AI-generated DISCUSSION TOPIC titles must be rewritten into clean, human-readable phrases.
 
@@ -652,6 +670,7 @@ Success Criteria
 
 User Input Query to Normalize:
 "${query}"`;
+      }
 
       const titleResponse = await aiProvider.generateResponse(titlePrompt, {
         systemInstruction: "You are a Topic Title Normalizer. Return ONLY the cleaned discussion topic title phrase. No explanations, no markdown lists, no wrapping quotes, and no metadata.",
