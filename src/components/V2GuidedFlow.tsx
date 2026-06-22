@@ -1556,10 +1556,6 @@ export default function V2GuidedFlow({
               unlockedTokens={unlockedTokens}
               onSelectNode={(id) => {
                 onSelectNode(id);
-                if (id) {
-                  // When clicking a node, automatically collapse the answers to see it fully
-                  collapseAllThreads();
-                }
               }}
               activeViewId="v2-guided-canvas"
               nodePositions={currentNodePositions}
@@ -1854,7 +1850,7 @@ export default function V2GuidedFlow({
                           <span className="text-[9px] uppercase font-mono tracking-widest text-[#2DD4BF] font-extrabold leading-none mb-1">
                             {index > 0 ? "Follow up question" : "DISCUSSION TOPIC"}
                           </span>
-                          <span className="text-sm sm:text-base font-bold text-zinc-100 truncate leading-tight">
+                          <span className="text-sm sm:text-base font-bold text-zinc-100 break-words whitespace-normal leading-tight">
                             {themeTitle}
                           </span>
                         </div>
@@ -1917,7 +1913,7 @@ export default function V2GuidedFlow({
                                   }}
                                   className={`px-2 py-1 rounded-md text-[10px] transition-all cursor-pointer border flex items-center gap-1 ${
                                     selectedNodeId === nodeId 
-                                      ? "bg-teal-500/15 border-teal-500/50 text-teal-400 font-medium scale-102"
+                                      ? "bg-zinc-800 border-zinc-600 text-zinc-100 font-medium"
                                       : "bg-zinc-950/80 hover:bg-zinc-900 border-zinc-850 text-zinc-400"
                                   }`}
                                 >
