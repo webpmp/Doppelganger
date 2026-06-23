@@ -312,11 +312,11 @@ Respond with valid JSON mapping the schema exactly.
               required: ["type", "title", "description"]
             }
           },
-          proposedState: {
+          mutations: {
             type: Type.OBJECT,
-            description: "The complete proposed updated state object containing activeNodes, notes, and edges.",
+            description: "Delta changes to apply to the knowledge graph. Do not replicate the original unchanged nodes or notes.",
             properties: {
-              activeNodes: {
+              addedNodes: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
@@ -324,8 +324,8 @@ Respond with valid JSON mapping the schema exactly.
                     id: { type: Type.STRING },
                     label: { type: Type.STRING },
                     summary: { type: Type.STRING },
-                    node_state: { type: Type.STRING, description: "'active' or 'archived'. Max 250 active nodes in the array." },
-                    visibility_status: { type: Type.STRING, description: "'public' or 'isolated_passphrase'" },
+                    node_state: { type: Type.STRING, description: "'active' or 'archived'." },
+                    visibility_status: { type: Type.STRING },
                     access_key_hash: { type: Type.STRING, nullable: true },
                     accessKeyHash: { type: Type.STRING, nullable: true },
                     isIsolated: { type: Type.BOOLEAN },
@@ -334,7 +334,25 @@ Respond with valid JSON mapping the schema exactly.
                   required: ["id", "label", "summary", "node_state", "visibility_status", "weight", "isIsolated"]
                 }
               },
-              notes: {
+              updatedNodes: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    summary: { type: Type.STRING, nullable: true },
+                    node_state: { type: Type.STRING, nullable: true },
+                    visibility_status: { type: Type.STRING, nullable: true },
+                    weight: { type: Type.NUMBER, nullable: true }
+                  },
+                  required: ["id"]
+                }
+              },
+              archivedNodeIds: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              addedNotes: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
@@ -346,7 +364,7 @@ Respond with valid JSON mapping the schema exactly.
                   required: ["node_id", "content", "source_origin"]
                 }
               },
-              edges: {
+              addedEdges: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
@@ -358,15 +376,14 @@ Respond with valid JSON mapping the schema exactly.
                   required: ["source", "target"]
                 }
               }
-            },
-            required: ["activeNodes", "notes", "edges"]
+            }
           }
         },
-        required: ["reasoning", "cards", "proposedState"]
+        required: ["reasoning", "cards", "mutations"]
       };
 
       const resultText = await aiProvider.generateResponse(promptMessage, {
-        systemInstruction: "You are the taxonomy model builder double. Structure the compaction mutations correctly in requested format.",
+        systemInstruction: "You are the taxonomy model builder double. Analyze the entry and output ONLY the mutations/changes required to modify the graph under the 'mutations' field. Do not copy or replicate the unchanged parts of the graph.",
         responseSchema: schema
       });
 
@@ -377,42 +394,66 @@ Respond with valid JSON mapping the schema exactly.
       }
       parsedCompaction = JSON.parse(cleanedText.trim());
 
-      // Restore full note content bodies to prevent data loss
-      if (parsedCompaction.proposedState && Array.isArray(parsedCompaction.proposedState.notes)) {
-        const restoredNotes: any[] = [];
-        
-        parsedCompaction.proposedState.notes.forEach((n: any) => {
-          if (n.content === "[Detail text omitted for token optimization]") {
-            const original = notes.find((orig: any) => 
-              (orig.node_id === n.node_id || orig.nodeId === n.node_id) && 
-              orig.source_origin === n.source_origin
-            );
-            if (original) {
-              restoredNotes.push({
-                ...n,
-                content: original.content
-              });
-            } else {
-              restoredNotes.push(n);
-            }
-          } else {
-            restoredNotes.push(n);
+      // Merge mutations to build the complete proposedState on the server programmatically
+      let nextActiveNodes = JSON.parse(JSON.stringify(activeNodes));
+      let nextNotes = JSON.parse(JSON.stringify(notes));
+      let nextEdges = JSON.parse(JSON.stringify(edges));
+
+      const muts = parsedCompaction.mutations || {};
+
+      // 1. Process added nodes
+      if (Array.isArray(muts.addedNodes)) {
+        muts.addedNodes.forEach((an: any) => {
+          if (!nextActiveNodes.some((n: any) => n.id === an.id)) {
+            nextActiveNodes.push(an);
           }
         });
-
-        // Ensure no historical notes were dropped or lost by the AI model during rewrite
-        notes.forEach((orig: any) => {
-          const alreadyExists = restoredNotes.some((rn: any) => 
-            (rn.node_id === orig.node_id || rn.node_id === orig.nodeId) && 
-            rn.source_origin === orig.source_origin
-          );
-          if (!alreadyExists) {
-            restoredNotes.push(orig);
-          }
-        });
-
-        parsedCompaction.proposedState.notes = restoredNotes;
       }
+
+      // 2. Process updated nodes
+      if (Array.isArray(muts.updatedNodes)) {
+        muts.updatedNodes.forEach((un: any) => {
+          const idx = nextActiveNodes.findIndex((n: any) => n.id === un.id);
+          if (idx !== -1) {
+            nextActiveNodes[idx] = {
+              ...nextActiveNodes[idx],
+              ...un
+            };
+          }
+        });
+      }
+
+      // 3. Process archivedNodeIds
+      if (Array.isArray(muts.archivedNodeIds)) {
+        muts.archivedNodeIds.forEach((id: string) => {
+          const idx = nextActiveNodes.findIndex((n: any) => n.id === id);
+          if (idx !== -1) {
+            nextActiveNodes[idx].node_state = "archived";
+          }
+        });
+      }
+
+      // 4. Process added notes
+      if (Array.isArray(muts.addedNotes)) {
+        muts.addedNotes.forEach((an: any) => {
+          nextNotes.push(an);
+        });
+      }
+
+      // 5. Process added edges
+      if (Array.isArray(muts.addedEdges)) {
+        muts.addedEdges.forEach((ae: any) => {
+          if (!nextEdges.some((e: any) => e.source === ae.source && e.target === ae.target)) {
+            nextEdges.push(ae);
+          }
+        });
+      }
+
+      parsedCompaction.proposedState = {
+        activeNodes: nextActiveNodes,
+        notes: nextNotes,
+        edges: nextEdges
+      };
     } catch (apiError: any) {
       console.warn("Compaction active provider failed, running local compaction fallback:", apiError.message || apiError);
       
