@@ -4462,7 +4462,7 @@ export default function App() {
                         <div className="flex flex-col gap-1">
                           <div className="flex justify-between items-center">
                             <label htmlFor="journal-node-title" className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                              Project Title
+                              Title
                             </label>
                             {!selectedNodeId && (
                               <span className="text-[9px] text-[#2DD4BF] font-mono font-bold animate-pulse">
