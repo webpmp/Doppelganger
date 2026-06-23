@@ -4827,9 +4827,9 @@ export default function App() {
                                 const isSecureGate = card.type === "SECURE_GATE_TRIGGERED";
                                 const isArchive = card.type === "ARCHIVE_NODE";
                                 const typeTranslations: Record<string, string> = {
-                                  "ADD_NODE": "New Project Bubble",
+                                  "ADD_NODE": "New Project",
                                   "UPDATE_NODE": "Update Project Info",
-                                  "ARCHIVE_NODE": "Archive Project Bubble",
+                                  "ARCHIVE_NODE": "Archive Project",
                                   "ADD_MEMORY": "New Progress Note",
                                   "SECURE_GATE_TRIGGERED": "Gated Project Security"
                                 };

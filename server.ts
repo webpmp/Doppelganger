@@ -277,6 +277,7 @@ Wait, generate a clear human-readable placeholder passcode string for the token 
 3. Node weights should be scaled from 0.5 to 3.0 based on activity/frequency of mentions.
 4. Extract new granular notes from the text and associate them with correct nodes. Set their "source_origin" to something like "Journal_Entry" or sequential naming.
 5. Identify relation edges connecting these concepts. IMPORTANT HIERARCHICAL PATH CONSTRAINT: Nodes should strictly connect in a hierarchical sequence (1 > 2 > 3). There must never be a level 3 node (e.g., 1.11, 2.11, weight 1.0) connected directly to a level 1 node (e.g., 1.0, 2.0, weight 3.0). Level 3 nodes must only connect to Level 2 nodes (e.g., 1.1, 2.1, weight 2.0), and Level 2 nodes connect to Level 1 nodes. Direct connections between Level 3 and Level 1 are strictly forbidden.
+6. Never refer to projects, workstreams, tasks, or notes as "nodes" or "bubbles" in user-facing card titles, descriptions, or reasoning. Use clean terminology: e.g., "Project" (or "Workstream" / "Task") or "Note" / "Notes".
 
 Respond with valid JSON mapping the schema exactly.
 `;
@@ -589,8 +590,8 @@ Respond with valid JSON mapping the schema exactly.
             actualNode.node_state = "archived";
             fallbackCards.push({
               type: "ARCHIVE_NODE",
-              title: `Archive node: ${actualNode.label}`,
-              description: `Enforced structural scale limits. Selected lower weight concept for archival.`
+              title: `Archive Project: ${actualNode.label}`,
+              description: `Enforced 9 active projects limit. Moved lower-priority project "${actualNode.label}" to history.`
             });
           }
         }
