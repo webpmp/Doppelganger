@@ -241,7 +241,17 @@ export class AIProvider {
     };
 
     if (options?.responseSchema) {
-      payload.response_format = { type: "json_object" };
+      if (this.config.provider === "lm-studio") {
+        payload.response_format = {
+          type: "json_schema",
+          json_schema: {
+            name: "CompactionSchema",
+            schema: options.responseSchema
+          }
+        };
+      } else {
+        payload.response_format = { type: "json_object" };
+      }
     }
 
     const headers: Record<string, string> = {
