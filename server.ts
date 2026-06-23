@@ -297,7 +297,7 @@ Respond with valid JSON mapping the schema exactly.
         properties: {
           reasoning: {
             type: Type.STRING,
-            description: "AI reasoning detailing how the journal was evaluated, the 250-node display limit handled, any sensitivity triggered, and overall changes."
+            description: "Extremely brief 1-2 sentence explanation of changes. Do not write a long paragraph."
           },
           cards: {
             type: Type.ARRAY,
@@ -383,7 +383,7 @@ Respond with valid JSON mapping the schema exactly.
       };
 
       const resultText = await aiProvider.generateResponse(promptMessage, {
-        systemInstruction: "You are the taxonomy model builder double. Analyze the entry and output ONLY the mutations/changes required to modify the graph under the 'mutations' field. Do not copy or replicate the unchanged parts of the graph.",
+        systemInstruction: "You are the taxonomy model builder double. Analyze the entry and output ONLY the mutations/changes required to modify the graph under the 'mutations' field. Keep the 'reasoning' field in your JSON response extremely brief (1-2 sentences maximum). Do not copy or replicate the unchanged parts of the graph.",
         responseSchema: schema
       });
 

@@ -241,10 +241,7 @@ export class AIProvider {
     };
 
     if (options?.responseSchema) {
-      if (this.config.provider !== "lm-studio") {
-        // Try to pass response format JSON schema for structured output
-        payload.response_format = { type: "json_object" };
-      }
+      payload.response_format = { type: "json_object" };
     }
 
     const headers: Record<string, string> = {
