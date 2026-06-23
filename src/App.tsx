@@ -2426,7 +2426,26 @@ export default function App() {
   // Stream Compaction Handler (Loop 1)
   const handleIngestJournal = async (e: FormEvent) => {
     e.preventDefault();
-    if (!journalText.trim()) return;
+
+    let journalEntryText = journalText;
+    if (!selectedNodeId) {
+      const parts = [];
+      if (editNodeTitle.trim()) {
+        parts.push(`Title: ${editNodeTitle.trim()}`);
+      }
+      if (editNodeSummary.trim()) {
+        parts.push(`Summary: ${editNodeSummary.trim()}`);
+      }
+      if (editNodeDate.trim()) {
+        parts.push(`Date: ${editNodeDate.trim()}`);
+      }
+      if (journalText.trim()) {
+        parts.push(`Notes: ${journalText.trim()}`);
+      }
+      journalEntryText = parts.join("\n");
+    }
+
+    if (!journalEntryText.trim()) return;
 
     // Turn off and clean vocal recording if active
     if (isRecordingJournal && journalRecognitionRef.current) {
@@ -2449,7 +2468,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           state: graphState,
-          journalEntry: journalText,
+          journalEntry: journalEntryText,
           aiConfig: aiConfig
         })
       });
@@ -2462,6 +2481,13 @@ export default function App() {
       setStagedReasoning(data.reasoning);
       setStagedCards(data.cards || []);
       setProposedState(data.proposedState);
+      
+      if (!selectedNodeId) {
+        setEditNodeTitle("");
+        setEditNodeSummary("");
+        setEditNodeDate("");
+        setJournalText("");
+      }
     } catch (err: any) {
       console.error(err);
       // Append warning to chat
@@ -4465,27 +4491,28 @@ export default function App() {
                               Title
                             </label>
                             {!selectedNodeId && (
-                              <span className="text-[9px] text-[#2DD4BF] font-mono font-bold animate-pulse">
-                                [Select Node to Edit]
+                              <span className="text-[9px] text-[#2DD4BF] font-mono font-bold">
+                                [New Entry]
                               </span>
                             )}
                           </div>
                           <input 
                             id="journal-node-title"
                             type="text"
-                            disabled={!selectedNodeId}
-                            value={selectedNodeId ? editNodeTitle : ""}
+                            value={editNodeTitle}
                             onChange={(e) => {
                               const val = e.target.value;
                               setEditNodeTitle(val);
-                              handleUpdateNodeInGraph({ label: val });
-                              setJournalText(`Modify project (#${selectedNodeId}):\nTitle: ${val}\nSummary: ${editNodeSummary}`);
+                              if (selectedNodeId) {
+                                handleUpdateNodeInGraph({ label: val });
+                                setJournalText(`Modify project (#${selectedNodeId}):\nTitle: ${val}\nSummary: ${editNodeSummary}`);
+                              }
                             }}
-                            placeholder="Select a node in the outline to edit project title..."
+                            placeholder={selectedNodeId ? "Edit project title..." : "Enter new project title..."}
                             className={`w-full bg-[#0D0D0F] border rounded-xl p-3 text-xs focus:outline-none transition-all ${
                               selectedNodeId 
                                 ? "border-emerald-500/45 focus:border-[#2DD4BF] text-zinc-100 font-bold bg-[#141416]/50 shadow-[0_0_8px_rgba(45,212,191,0.06)]" 
-                                : "border-zinc-900/40 text-zinc-600 cursor-not-allowed placeholder-zinc-800"
+                                : "border-[#27272A] focus:border-[#2DD4BF]/50 text-zinc-200 placeholder-zinc-650 bg-[#0D0D0F]"
                             }`}
                           />
                         </div>
@@ -4509,19 +4536,20 @@ export default function App() {
                           <input 
                             id="journal-node-summary"
                             type="text"
-                            disabled={!selectedNodeId}
-                            value={selectedNodeId ? editNodeSummary : ""}
+                            value={editNodeSummary}
                             onChange={(e) => {
                               const val = e.target.value;
                               setEditNodeSummary(val);
-                              handleUpdateNodeInGraph({ summary: val });
-                              setJournalText(`Modify project (#${selectedNodeId}):\nTitle: ${editNodeTitle}\nSummary: ${val}`);
+                              if (selectedNodeId) {
+                                handleUpdateNodeInGraph({ summary: val });
+                                setJournalText(`Modify project (#${selectedNodeId}):\nTitle: ${editNodeTitle}\nSummary: ${val}`);
+                              }
                             }}
-                            placeholder="Select a node in the outline to edit summary..."
+                            placeholder={selectedNodeId ? "Edit summary..." : "Enter summary of what you did..."}
                             className={`w-full bg-[#0D0D0F] border rounded-xl p-3 text-xs focus:outline-none transition-all ${
                               selectedNodeId 
                                 ? "border-emerald-500/45 focus:border-[#2DD4BF] text-zinc-100 bg-[#141416]/50 shadow-[0_0_8px_rgba(45,212,191,0.06)]" 
-                                : "border-zinc-900/40 text-zinc-650 cursor-not-allowed placeholder-zinc-800 bg-[#0A0A0B]/40"
+                                : "border-[#27272A] focus:border-[#2DD4BF]/50 text-zinc-200 placeholder-zinc-650 bg-[#0D0D0F]"
                             }`}
                           />
                         </div>
@@ -4529,23 +4557,24 @@ export default function App() {
                         {/* Node Date Info Input */}
                         <div className="flex flex-col gap-1">
                           <label htmlFor="journal-node-date" className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                            {isNodeEdited ? "UPDATED" : "CREATED"}
+                            {selectedNodeId ? (isNodeEdited ? "UPDATED" : "CREATED") : "DATE"}
                           </label>
                           <input 
                             id="journal-node-date"
                             type="text"
-                            disabled={!selectedNodeId}
-                            value={selectedNodeId ? editNodeDate : ""}
+                            value={editNodeDate}
                             onChange={(e) => {
                               const val = e.target.value;
                               setEditNodeDate(val);
-                              handleUpdateNodeInGraph({ dateText: val });
+                              if (selectedNodeId) {
+                                handleUpdateNodeInGraph({ dateText: val });
+                              }
                             }}
-                            placeholder="Select a node in the outline to edit date..."
+                            placeholder={selectedNodeId ? "Edit date..." : "Enter date..."}
                             className={`w-full bg-[#0D0D0F] border rounded-xl p-3 text-xs focus:outline-none transition-all ${
                               selectedNodeId 
                                 ? "border-emerald-500/45 focus:border-[#2DD4BF] text-zinc-100 bg-[#141416]/50 shadow-[0_0_8px_rgba(45,212,191,0.06)]" 
-                                : "border-zinc-900/40 text-zinc-650 cursor-not-allowed placeholder-zinc-800 bg-[#0A0A0B]/40"
+                                : "border-[#27272A] focus:border-[#2DD4BF]/50 text-zinc-200 placeholder-zinc-650 bg-[#0D0D0F]"
                             }`}
                           />
                         </div>
