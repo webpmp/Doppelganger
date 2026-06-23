@@ -362,6 +362,11 @@ export default function KnowledgeGraphCanvas({
     onSelectNodeRef.current = onSelectNode;
   }, [onSelectNode]);
 
+  const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
+
   const hasInitialFitRef = useRef(false);
   const prevNodesCountRef = useRef(0);
   const prevSidebarOpenRef = useRef(false);
@@ -1069,7 +1074,7 @@ export default function KnowledgeGraphCanvas({
 
       const getRadiusForLink = (nodeData: any) => {
         const base = getParentRadius(nodeData);
-        return nodeData.id === selectedNodeId ? base + 5 : base;
+        return nodeData.id === selectedNodeIdRef.current ? base + 5 : base;
       };
 
       link

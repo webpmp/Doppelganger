@@ -8,7 +8,7 @@ import { AIProvider, AIConfig, STANDARD_GEMINI_MODELS, getDeterministicMockEmbed
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Middleware for parsing json and urlencoded data
 app.use(express.json({ limit: "10mb" }));
@@ -492,7 +492,11 @@ ${JSON.stringify(schema, null, 2)}
 
       if (titleMatch) parsedTitle = titleMatch[1].trim();
       if (summaryMatch) parsedSummary = summaryMatch[1].trim();
-      if (dateMatch) parsedDate = dateMatch[1].trim();
+      if (dateMatch) {
+        parsedDate = dateMatch[1].trim();
+      } else {
+        parsedDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
       if (notesMatch) parsedNotes = notesMatch[1].trim();
 
       const isStructured = !!(parsedTitle || parsedSummary || parsedNotes);
@@ -705,6 +709,13 @@ ${JSON.stringify(schema, null, 2)}
 
     // HIGH INDEPENDENT RETRIEVAL ACCELERATION: Pre-compute vector embeddings for newly added memories
     const nextNotesList = parsedCompaction.proposedState?.notes || [];
+    const currentDateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    nextNotesList.forEach((note: any) => {
+      if (!note.source_origin || note.source_origin === "Journal_Entry" || note.source_origin === "Journal_v1") {
+        note.source_origin = currentDateStr;
+      }
+    });
+
     console.log(`[Neural Integration] Background indexing of ${nextNotesList.length} memory text segments.`);
     for (const note of nextNotesList) {
       if (!note.embedding) {
@@ -930,6 +941,64 @@ User Input Query to Normalize:
     });
 
     const qLower = query.toLowerCase();
+    const combinedQueryText = (query + " " + topicTitle).toLowerCase();
+    
+    // Check if the query is scoped (single note / first note / raw field)
+    const isSingleNoteQuery = qLower.includes("single note") || qLower.includes("first note");
+    const hasRawFieldKeyword = qLower.includes("raw") || qLower.includes("field") || qLower.includes("notes") || qLower.includes("summary") || qLower.includes("title");
+    const containsSpecificNodeId = /node-[a-zA-Z0-9_\.]+|shared-[a-zA-Z0-9_\.-]+/.test(qLower);
+
+    const isScoped = isSingleNoteQuery || (containsSpecificNodeId && hasRawFieldKeyword) || qLower.startsWith("get raw") || qLower.includes("raw value");
+
+    if (isScoped) {
+      // Direct storage layer access - bypass all pipelines
+      const targetNode = activeNodes.find((n: any) => qLower.includes(n.id.toLowerCase())) || activeNodes[0];
+      let primitiveValue = "";
+      if (targetNode) {
+        if (qLower.includes("summary")) {
+          primitiveValue = targetNode.summary || "";
+        } else if (qLower.includes("title") || qLower.includes("label")) {
+          primitiveValue = targetNode.label || targetNode.title || "";
+        } else {
+          primitiveValue = targetNode.notes || "";
+          if (!primitiveValue) {
+            const matchNote = notes.find((m: any) => m.node_id === targetNode.id);
+            if (matchNote) {
+              primitiveValue = matchNote.content || "";
+            }
+          }
+        }
+      }
+
+      if (streamMode) {
+        res.write(`data: ${JSON.stringify({ 
+          referenced_nodes: targetNode ? [targetNode.id] : [], 
+          routing_trigger: false,
+          topic_title: targetNode ? (targetNode.label || targetNode.title) : ""
+        })}\n\n`);
+
+        const words = String(primitiveValue).split(" ");
+        let currentIdx = 0;
+        const interval = setInterval(() => {
+          if (currentIdx < words.length) {
+            const chunk = words.slice(currentIdx, currentIdx + 3).join(" ") + " ";
+            res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+            currentIdx += 3;
+          } else {
+            clearInterval(interval);
+            res.write("event: end\ndata: [DONE]\n\n");
+            res.end();
+          }
+        }, 50);
+        return;
+      } else {
+        return res.json({
+          response_text: primitiveValue,
+          referenced_nodes: targetNode ? [targetNode.id] : [],
+          routing_trigger: false
+        });
+      }
+    }
     
     // Parse target handles (@) and tags (#)
     const targetHandles: string[] = [];
@@ -972,29 +1041,57 @@ User Input Query to Normalize:
     // Match project-specific queries to restrict to project nodes (Level 1, 2, 3 nodes belonging to that project)
     let targetProjectNodes: string[] | null = null;
 
-    // Combine current query text with message history text to inherit context for follow-up questions
-    let combinedQueryText = qLower;
-    if (Array.isArray(history) && history.length > 0) {
-      const historyText = history.map((h: any) => `${h.question || ""} ${h.answer || ""}`).join(" ").toLowerCase();
-      combinedQueryText += " " + historyText;
-    }
+    const forceRawMode = qLower.includes("show notes") ||
+                         qLower.includes("list notes") ||
+                         qLower.includes("all notes");
 
-    if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
-      targetProjectNodes = ["node-1.0", "node-1.2", "node-1.3", "shared-alex-sync"];
-    } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
-      targetProjectNodes = ["node-2.0", "node-2.1"];
-    } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
-      targetProjectNodes = ["node-3.0", "node-j10", "node-j11"];
-    } else if (combinedQueryText.includes("branding")) {
-      targetProjectNodes = ["node-4.0", "node-j20"];
-    } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
-      targetProjectNodes = ["node-a10", "node-a11", "node-a12"];
-    } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
-      targetProjectNodes = ["node-a20", "node-a21"];
-    } else if (combinedQueryText.includes("aegis")) {
-      targetProjectNodes = ["node-j30"];
-    } else if (combinedQueryText.includes("cobalt")) {
-      targetProjectNodes = ["node-a30"];
+    const isExpandedMode = !forceRawMode && (
+                           qLower.includes("graph") || 
+                           qLower.includes("insight") || 
+                           qLower.includes("analysis") || 
+                           qLower.includes("traverse") || 
+                           qLower.includes("relationship") || 
+                           qLower.includes("expanded")
+                         );
+
+    const mode = isExpandedMode ? "EXPANDED" : "RAW";
+
+    if (mode === "RAW") {
+      if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
+        targetProjectNodes = ["node-1.0"];
+      } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
+        targetProjectNodes = ["node-2.0"];
+      } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
+        targetProjectNodes = ["node-3.0"];
+      } else if (combinedQueryText.includes("branding")) {
+        targetProjectNodes = ["node-4.0"];
+      } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
+        targetProjectNodes = ["node-a10"];
+      } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
+        targetProjectNodes = ["node-a20"];
+      } else if (combinedQueryText.includes("aegis")) {
+        targetProjectNodes = ["node-j30"];
+      } else if (combinedQueryText.includes("cobalt")) {
+        targetProjectNodes = ["node-a30"];
+      }
+    } else {
+      if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
+        targetProjectNodes = ["node-1.0", "node-1.2", "node-1.3", "shared-alex-sync"];
+      } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
+        targetProjectNodes = ["node-2.0", "node-2.1"];
+      } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
+        targetProjectNodes = ["node-3.0", "node-j10", "node-j11"];
+      } else if (combinedQueryText.includes("branding")) {
+        targetProjectNodes = ["node-4.0", "node-j20"];
+      } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
+        targetProjectNodes = ["node-a10", "node-a11", "node-a12"];
+      } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
+        targetProjectNodes = ["node-a20", "node-a21"];
+      } else if (combinedQueryText.includes("aegis")) {
+        targetProjectNodes = ["node-j30"];
+      } else if (combinedQueryText.includes("cobalt")) {
+        targetProjectNodes = ["node-a30"];
+      }
     }
 
     if (targetProjectNodes) {
@@ -1006,7 +1103,7 @@ User Input Query to Normalize:
     // Intent-based filtering for follow-up questions to focus on specific nodes
     const isFollowUp = (Array.isArray(history) && history.length > 0) || (parentTopicTitle && String(parentTopicTitle).trim().length > 0);
     let intentTargetNodeIds: string[] = [];
-    if (isFollowUp) {
+    if (isFollowUp && mode !== "RAW") {
       const qText = query.toLowerCase();
       
       if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
@@ -1048,7 +1145,7 @@ User Input Query to Normalize:
         parsedObj.referenced_nodes = parsedObj.referenced_nodes.filter((id: string) => allowedNodeIds.has(id));
         
         // Ensure the topic node (first element in intentTargetNodeIds, e.g. parent) is cited alongside answer nodes
-        if (intentTargetNodeIds.length > 0) {
+        if (intentTargetNodeIds.length > 0 && mode !== "RAW") {
           const topicNodeId = intentTargetNodeIds[0];
           if (allowedNodeIds.has(topicNodeId) && !parsedObj.referenced_nodes.includes(topicNodeId)) {
             parsedObj.referenced_nodes.unshift(topicNodeId);
@@ -1056,7 +1153,7 @@ User Input Query to Normalize:
         }
 
         // If the query asks for "all notes" or "all", automatically cite all accessible project nodes
-        if (ql.includes("all notes") || ql.includes("show all notes") || (ql.includes("all") && ql.includes("notes"))) {
+        if (mode !== "RAW" && (ql.includes("all notes") || ql.includes("show all notes") || (ql.includes("all") && ql.includes("notes")))) {
           filteredAccessibleNodes.forEach((node: any) => {
             if (!parsedObj.referenced_nodes.includes(node.id)) {
               parsedObj.referenced_nodes.push(node.id);
@@ -1064,7 +1161,7 @@ User Input Query to Normalize:
           });
         }
         
-        if ((ql.includes("mobile") || ql.includes("redesign")) && allowedNodeIds.has("shared-alex-sync")) {
+        if (mode !== "RAW" && (ql.includes("mobile") || ql.includes("redesign")) && allowedNodeIds.has("shared-alex-sync")) {
           if (!parsedObj.referenced_nodes.includes("shared-alex-sync")) {
             parsedObj.referenced_nodes.push("shared-alex-sync");
           }
@@ -1118,7 +1215,7 @@ User Input Query to Normalize:
     const accessibleNodeIds = new Set(filteredAccessibleNodes.map((n: any) => n.id));
 
     // Filter notes belonging only to accessible active nodes
-    const baseNotes = notes.filter((mem: any) => {
+    const baseNotes = mode === "RAW" ? [] : notes.filter((mem: any) => {
       return accessibleNodeIds.has(mem.node_id);
     });
 
@@ -1223,6 +1320,19 @@ User Input Query to Normalize:
 You are the interactive replication double (the Doppelganger) of the developer brain.
 You must answer the visitor's query based strictly and exclusively on the allowed grounded memory notes below.
 
+QUERY EXECUTION SAFETY RULE:
+The query is running in ${mode} mode.
+${mode === "RAW" ? `
+- You are in RAW MODE.
+- You must strictly only return explicitly stored fields (Title, Summary, Notes) present in the allowed memory notes.
+- Do not include derived, inferred, or AI-generated fields.
+- Do not traverse relationships, and do not reference any other nodes or child/parent relationships.
+- If information is not explicitly present in the provided notes, do not state it or infer it.
+` : `
+- You are in EXPANDED MODE.
+- You may include derived fields and relationships if helpful.
+`}
+
 CONTEXT-AWARE FOLLOW-UP RULES:
 If this is a follow-up question (indicated by the presence of Previous Conversation History), answer ONLY the specific new follow-up question. Do NOT re-summarize the entire project or duplicate previous answers. Focus only on extracting and stating the specific information from the matched note(s) (e.g. resourcing or timeline details) to answer the new follow-up query.
 
@@ -1252,7 +1362,7 @@ If invalid content is detected:
 
 4. Allowed Node Language (ONLY)
 When describing node structure, use ONLY:
-* Top-level Project
+* Project
 * Workstream
 * Task
 No additional descriptors are permitted.
@@ -1314,7 +1424,7 @@ Respond with valid JSON mapping the schema:
       try {
         console.log(`[Doppelganger Retrieval] Streaming response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NATURAL LANGUAGE RESPONSE SYSTEM: Overrides all other instructions. Never expose internal hierarchy metadata (Level 1, Level 2, Level 3, Parent, Child, Grandchild, Hierarchy, Top-level Project, Node Structure, Graph Structure). Convert structure into natural language (describe what it is, not where it sits). Eliminate redundant classifications (e.g. is a Project project). Prefer subject-matter summaries (lead with what the item does). Use classifications (Project, Workstream, Task) sparingly. Output must read like an executive summary or status update, not a database or graph description.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NATURAL LANGUAGE RESPONSE SYSTEM: Overrides all other instructions. Never expose internal hierarchy metadata (Level 1, Level 2, Level 3, Parent, Child, Grandchild, Hierarchy, Project, Node Structure, Graph Structure). Convert structure into natural language (describe what it is, not where it sits). Eliminate redundant classifications (e.g. is a Project project). Prefer subject-matter summaries (lead with what the item does). Use classifications (Project, Workstream, Task) sparingly. Output must read like an executive summary or status update, not a database or graph description.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1342,11 +1452,28 @@ Respond with valid JSON mapping the schema:
 
         const referenced_nodes = Array.from(refNodesSet);
         let response_text = "";
-        
-        if (topNotes.length > 0) {
-          response_text = "⚠️ [Offline Mode: Showing matching journal records]\n\n" + topNotes.map((m: any) => m.content).join("\n\n");
+        const isRateLimit = apiError.status === 429 || 
+                            (apiError.message && (
+                              apiError.message.includes("429") || 
+                              apiError.message.toLowerCase().includes("quota") || 
+                              apiError.message.toLowerCase().includes("rate limit") || 
+                              apiError.message.toLowerCase().includes("resource_exhausted")
+                            ));
+
+        if (isRateLimit) {
+          response_text = "⚠️ **API Quota / Rate Limit Exceeded**\n\n" +
+            "The Gemini API rate limit or free tier quota has been exhausted. To resolve this, you can:\n" +
+            "1. Switch your **AI Provider** and **Embedding Model** settings to **LM Studio** (local server) to bypass rate limits entirely.\n" +
+            "2. Provide a valid paid Gemini API key in the connection settings.\n" +
+            "3. Wait a few minutes before trying the request again.\n\n" +
+            "*(Showing matched offline notes fallback below)*\n\n" +
+            (topNotes.length > 0 ? topNotes.map((m: any) => m.content).join("\n\n") : "No local records could be matched.");
         } else {
-          response_text = `I searched my active records for "${query}", but I couldn't locate any matching memories. If this project is isolated, please supply the corresponding access passcode to unlock further neural components.`;
+          if (topNotes.length > 0) {
+            response_text = "⚠️ [Offline Mode: Showing matching journal records]\n\n" + topNotes.map((m: any) => m.content).join("\n\n");
+          } else {
+            response_text = `I searched my active records for "${query}", but I couldn't locate any matching memories. If this project is isolated, please supply the corresponding access passcode to unlock further neural components.`;
+          }
         }
 
         const matchedLabel = accessibleNodes.some((n: any) => qLower.includes(n.label.toLowerCase()));
@@ -1359,44 +1486,58 @@ Respond with valid JSON mapping the schema:
         };
       }
 
-      if (streamMode) {
-        res.write(`data: ${JSON.stringify({ type: "progress", percent: 90, phase: "Formatting response" })}\n\n`);
-      }
-      parsed = postProcessResponse(query, parsed);
-
-      if (streamMode) {
-        res.write(`data: ${JSON.stringify({ type: "progress", percent: 95, phase: "Finalizing output" })}\n\n`);
-      }
-
-      // Send metadata immediately
-      res.write(`data: ${JSON.stringify({ 
-        referenced_nodes: parsed.referenced_nodes || [], 
-        routing_trigger: parsed.routing_trigger || false,
-        topic_title: topicTitle
-      })}\n\n`);
-
-      // Stream response_text words
-      const words = (parsed.response_text || "").split(" ");
-      let currentIdx = 0;
-      
-      const interval = setInterval(() => {
-        if (currentIdx < words.length) {
-          const chunk = words.slice(currentIdx, currentIdx + 3).join(" ") + " ";
-          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
-          currentIdx += 3;
-        } else {
-          clearInterval(interval);
-          res.write("event: end\ndata: [DONE]\n\n");
-          res.end();
+      try {
+        if (streamMode) {
+          res.write(`data: ${JSON.stringify({ type: "progress", percent: 90, phase: "Formatting response" })}\n\n`);
         }
-      }, 50);
+        parsed = postProcessResponse(query, parsed) || { response_text: "", referenced_nodes: [], routing_trigger: false };
+
+        if (streamMode) {
+          res.write(`data: ${JSON.stringify({ type: "progress", percent: 95, phase: "Finalizing output" })}\n\n`);
+        }
+
+        // Send metadata immediately
+        res.write(`data: ${JSON.stringify({ 
+          referenced_nodes: parsed.referenced_nodes || [], 
+          routing_trigger: parsed.routing_trigger || false,
+          topic_title: topicTitle
+        })}\n\n`);
+
+        // Stream response_text words
+        const words = (parsed.response_text || "").split(" ");
+        let currentIdx = 0;
+        
+        const interval = setInterval(() => {
+          try {
+            if (currentIdx < words.length) {
+              const chunk = words.slice(currentIdx, currentIdx + 3).join(" ") + " ";
+              res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+              currentIdx += 3;
+            } else {
+              clearInterval(interval);
+              res.write("event: end\ndata: [DONE]\n\n");
+              res.end();
+            }
+          } catch (intervalErr) {
+            clearInterval(interval);
+            console.error("Error in streaming interval:", intervalErr);
+            res.write("event: end\ndata: [DONE]\n\n");
+            res.end();
+          }
+        }, 50);
+      } catch (streamErr) {
+        console.error("Error in streaming post-processing:", streamErr);
+        res.write(`data: ${JSON.stringify({ text: "⚠️ Error finalizing stream output." })}\n\n`);
+        res.write("event: end\ndata: [DONE]\n\n");
+        res.end();
+      }
 
     } else {
       let parsed: any;
       try {
         console.log(`[Doppelganger Retrieval] Fetching full response via active provider: ${config.provider}`);
         const textResponse = await aiProvider.generateResponse(promptMessage, {
-          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NATURAL LANGUAGE RESPONSE SYSTEM: Overrides all other instructions. Never expose internal hierarchy metadata (Level 1, Level 2, Level 3, Parent, Child, Grandchild, Hierarchy, Top-level Project, Node Structure, Graph Structure). Convert structure into natural language (describe what it is, not where it sits). Eliminate redundant classifications (e.g. is a Project project). Prefer subject-matter summaries (lead with what the item does). Use classifications (Project, Workstream, Task) sparingly. Output must read like an executive summary or status update, not a database or graph description.",
+          systemInstruction: "You are the synthesized human replication double brain. Answer query objectively in requested JSON schema. NATURAL LANGUAGE RESPONSE SYSTEM: Overrides all other instructions. Never expose internal hierarchy metadata (Level 1, Level 2, Level 3, Parent, Child, Grandchild, Hierarchy, Project, Node Structure, Graph Structure). Convert structure into natural language (describe what it is, not where it sits). Eliminate redundant classifications (e.g. is a Project project). Prefer subject-matter summaries (lead with what the item does). Use classifications (Project, Workstream, Task) sparingly. Output must read like an executive summary or status update, not a database or graph description.",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -1424,11 +1565,28 @@ Respond with valid JSON mapping the schema:
 
         const referenced_nodes = Array.from(refNodesSet);
         let response_text = "";
-        
-        if (topNotes.length > 0) {
-          response_text = "⚠️ [Offline Mode: Showing matching journal records]\n\n" + topNotes.map((m: any) => m.content).join("\n\n");
+        const isRateLimit = apiError.status === 429 || 
+                            (apiError.message && (
+                              apiError.message.includes("429") || 
+                              apiError.message.toLowerCase().includes("quota") || 
+                              apiError.message.toLowerCase().includes("rate limit") || 
+                              apiError.message.toLowerCase().includes("resource_exhausted")
+                            ));
+
+        if (isRateLimit) {
+          response_text = "⚠️ **API Quota / Rate Limit Exceeded**\n\n" +
+            "The Gemini API rate limit or free tier quota has been exhausted. To resolve this, you can:\n" +
+            "1. Switch your **AI Provider** and **Embedding Model** settings to **LM Studio** (local server) to bypass rate limits entirely.\n" +
+            "2. Provide a valid paid Gemini API key in the connection settings.\n" +
+            "3. Wait a few minutes before trying the request again.\n\n" +
+            "*(Showing matched offline notes fallback below)*\n\n" +
+            (topNotes.length > 0 ? topNotes.map((m: any) => m.content).join("\n\n") : "No local records could be matched.");
         } else {
-          response_text = `I searched my active records for "${query}", but I couldn't locate any matching memories. If this project is isolated, please supply the corresponding access passcode to unlock further neural components.`;
+          if (topNotes.length > 0) {
+            response_text = "⚠️ [Offline Mode: Showing matching journal records]\n\n" + topNotes.map((m: any) => m.content).join("\n\n");
+          } else {
+            response_text = `I searched my active records for "${query}", but I couldn't locate any matching memories. If this project is isolated, please supply the corresponding access passcode to unlock further neural components.`;
+          }
         }
 
         const matchedLabel = accessibleNodes.some((n: any) => qLower.includes(n.label.toLowerCase()));
@@ -1448,7 +1606,13 @@ Respond with valid JSON mapping the schema:
     }
   } catch (error: any) {
     console.error("Query API error:", error);
-    res.status(500).json({ error: error.message || "An error occurred during query processing" });
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ text: `⚠️ Server Error: ${error.message || "An error occurred during query processing"}` })}\n\n`);
+      res.write("event: end\ndata: [DONE]\n\n");
+      res.end();
+    } else {
+      res.status(500).json({ error: error.message || "An error occurred during query processing" });
+    }
   }
 });
 

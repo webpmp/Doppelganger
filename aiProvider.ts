@@ -104,7 +104,12 @@ export class AIProvider {
       const res = await fetch(`${cleanUrl}/models`);
       if (res.ok) {
         const data = await res.json();
-        const loadedModel = data?.data?.[0]?.id;
+        const modelsList = data?.data || [];
+        const chatModels = modelsList.filter((m: any) => {
+          const id = (m.id || "").toLowerCase();
+          return !id.includes("embed");
+        });
+        const loadedModel = chatModels[0]?.id || modelsList[0]?.id;
         if (loadedModel) return loadedModel;
       }
     } catch (e) {}
@@ -192,7 +197,13 @@ export class AIProvider {
     } else if (provider === "lm-studio") {
       // LM Studio (Local OpenAI compatible)
       const url = rewriteLocalhost(this.config.lmStudioConfig?.endpoint || "http://localhost:1234")!;
-      const model = this.config.lmStudioConfig?.model || "Currently Loaded Model";
+      let model = this.config.lmStudioConfig?.model || "Currently Loaded Model";
+      if (model === "Currently Loaded Model") {
+        const resolvedModel = await this.fetchActiveLMStudioModel();
+        if (resolvedModel && resolvedModel !== "Currently Loaded Model") {
+          model = resolvedModel;
+        }
+      }
       console.log(`[AIProvider] Running LM Studio Request [Endpoint: ${url}, Model: ${model}]`);
 
       return this.callOpenAICompatibleAPI(url, "", model, prompt, options);

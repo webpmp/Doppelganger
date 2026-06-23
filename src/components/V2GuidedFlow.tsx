@@ -116,6 +116,7 @@ interface V2GuidedFlowProps {
   ownerHandle?: string;
   onSwitchProfile?: (handle: string) => void;
   openDoppelgangerTab?: (handle: string) => void;
+  onOpenSettings?: () => void;
 }
 
 // Generate a friendly, non-technical title based on the user's question
@@ -307,6 +308,7 @@ export default function V2GuidedFlow({
   ownerHandle,
   onSwitchProfile,
   openDoppelgangerTab,
+  onOpenSettings,
 }: V2GuidedFlowProps) {
   if (typeof window !== "undefined" && !hasInitializedAppSession) {
     for (let i = 0; i < localStorage.length; i++) {
@@ -1279,9 +1281,25 @@ export default function V2GuidedFlow({
   }, [activeThreadId, isQuerying, rawTopicTitle, rawAnswerText, v2Threads.length]);
 
   useEffect(() => {
+    const isRateLimitError = !!rawAnswerText && (
+      rawAnswerText.toLowerCase().includes("rate limit") || 
+      rawAnswerText.toLowerCase().includes("quota") ||
+      rawAnswerText.toLowerCase().includes("resource_exhausted") ||
+      rawAnswerText.toLowerCase().includes("429") ||
+      rawAnswerText.toLowerCase().includes("error during inference") ||
+      rawAnswerText.toLowerCase().includes("grounding endpoint") ||
+      rawAnswerText.toLowerCase().includes("failed to contact")
+    );
+
     if (streamState === "loading") {
-      if (rawTopicTitle) {
+      if (isRateLimitError) {
+        setStreamState("completed");
+      } else if (rawTopicTitle) {
         setStreamState("topic-streaming");
+      } else if (rawAnswerText && !rawAnswerText.startsWith("Searching notes")) {
+        setStreamState("answer-streaming");
+      } else if (!isQuerying) {
+        setStreamState("completed");
       }
       return;
     }
@@ -1295,7 +1313,11 @@ export default function V2GuidedFlow({
         currentWordIndex++;
         if (currentWordIndex > words.length) {
           clearInterval(interval);
-          setStreamState("answer-streaming");
+          if (isRateLimitError) {
+            setStreamState("completed");
+          } else {
+            setStreamState("answer-streaming");
+          }
           if (v2Threads.length <= 1) {
             setNodeRevealStage(1);
           } else {
@@ -1310,6 +1332,10 @@ export default function V2GuidedFlow({
     }
 
     if (streamState === "answer-streaming") {
+      if (isRateLimitError) {
+        setStreamState("completed");
+        return;
+      }
       let revealedWordCount = 0;
       setDisplayedAnswer("");
 
@@ -1323,7 +1349,7 @@ export default function V2GuidedFlow({
         if (revealedWordCount < words.length) {
           revealedWordCount++;
           setDisplayedAnswer(words.slice(0, revealedWordCount).join(" "));
-        } else if (!isQueryingRef.current) {
+        } else {
           clearInterval(interval);
           setStreamState("completed");
         }
@@ -1337,7 +1363,7 @@ export default function V2GuidedFlow({
       setDisplayedAnswer(rawAnswerText);
       setNodeRevealStage(3);
     }
-  }, [streamState, rawTopicTitle, activeThreadId]);
+  }, [streamState, rawTopicTitle, activeThreadId, isQuerying, rawAnswerText]);
 
   useEffect(() => {
     if (nodeRevealStage === 1) {
@@ -1391,102 +1417,199 @@ export default function V2GuidedFlow({
     return graphState.activeNodes.find(n => n.id === selectedNodeId) || null;
   }, [selectedNodeId, graphState.activeNodes]);
 
-  const nodeNotes = useMemo(() => {
-    if (!selectedNode || !graphState?.notes) return [];
+  const [panelDetails, setPanelDetails] = useState<{
+    decText: string;
+    created: string;
+    notes: string;
+    memories: string[];
+    relatedWork: { id: string; label: string; summary: string }[];
+    insights: string[];
+  } | null>(null);
 
-    const getNodeLevelLocal = (n: any): number => {
-      if (!n) return 3;
-      if (n.level !== undefined) {
-        if (typeof n.level === "number") {
-          return n.level;
+  useEffect(() => {
+    // 1. Clear previously rendered details immediately on selection change
+    setPanelDetails(null);
+
+    if (!selectedNode) {
+      return;
+    }
+
+    const getNoteDate = (source: string) => {
+      if (!source) return "June 7, 2026";
+      const norm = source.trim().toLowerCase();
+      if (norm === "journal_v1") return "May 10, 2026";
+      if (norm === "journal_v2") return "May 18, 2026";
+      if (norm === "journal_v3") return "May 25, 2026";
+      if (norm === "journal_v4") return "June 2, 2026";
+      if (norm === "journal_entry") return "June 7, 2026";
+      try {
+        const parsed = new Date(source);
+        if (!isNaN(parsed.getTime())) {
+          return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
         }
-        if (n.level && typeof n.level === "object" && typeof n.level.value === "number") {
-          return n.level.value;
-        }
-      }
-      return classifyNodeLevel(n.label || "", "");
+      } catch (e) {}
+      return source;
     };
 
+    // 2. Load the selected item's data (notes/memories)
+    const allNotes = graphState?.notes || graphState?.memories || [];
+    const ownNotes = allNotes.filter(
+      (m: any) => m.node_id === selectedNode.id || m.nodeId === selectedNode.id
+    );
+    const primaryNotesText = ownNotes.map((m: any) => m.content).join("\n\n");
+
+    // 3. Resolve direct/indirect relationships based on Level rules
     const allActiveNodes = graphState?.activeNodes || [];
     const edges = graphState?.edges || [];
-    const level = getNodeLevelLocal(selectedNode);
-
-    if (level === 1) {
-      // Traverse the graph starting from the selected parent (level === 1) node using the edges array
-      const discoveredNodes: any[] = [];
-      const visitedIds = new Set<string>();
-      const queue: any[] = [selectedNode];
-      visitedIds.add(selectedNode.id);
-
-      while (queue.length > 0) {
-        const curr = queue.shift();
-        discoveredNodes.push(curr);
-
-        const adjacentEdges = edges.filter((e: any) => e.source === curr.id || e.target === curr.id);
-        adjacentEdges.forEach((e: any) => {
-          const oppId = e.source === curr.id ? e.target : e.source;
-          if (!visitedIds.has(oppId)) {
-            const oppNode = allActiveNodes.find(n => n.id === oppId);
-            if (oppNode) {
-              const oppLvl = getNodeLevelLocal(oppNode);
-              // Do not span across to other top level parent nodes
-              if (oppLvl === 1) {
-                return;
-              }
-              visitedIds.add(oppId);
-              queue.push(oppNode);
-            }
-          }
-        });
+    
+    const getNodeLevelLocal = (n: any) => {
+      if (n.level !== undefined) {
+        if (typeof n.level === "number") return n.level;
+        if (n.level && typeof n.level === "object" && typeof n.level.value === "number") return n.level.value;
       }
+      return classifyNodeLevel(n.label, "");
+    };
 
-      // Debug logging
-      const debugDiscovered = discoveredNodes.map(n => `${n.label || n.id} (ID: ${n.id}, Level: ${getNodeLevelLocal(n)})`);
-      const debugReturned = discoveredNodes.map(n => `${n.label || n.id} (ID: ${n.id}, Level: ${getNodeLevelLocal(n)})`);
-      const debugExcluded: { label: string; id: string; reason: string }[] = [];
+    const selLvl = getNodeLevelLocal(selectedNode);
+    const selHandle = (selectedNode.doppelgangerHandle || (selectedNode as any).ownerHandle || activeProfileHandle || "").toLowerCase().trim();
+    
+    let relatedNodes: any[] = [];
+    
+    const checkAccess = (oppNode: any) => {
+      const isIsolated = oppNode.isIsolated === true || oppNode.visibility_status === "isolated_passphrase";
+      const keyHash = (oppNode.access_key_hash || oppNode.accessKeyHash || "").toUpperCase().trim();
+      return !isIsolated || unlockedTokens.includes(keyHash);
+    };
 
-      allActiveNodes.forEach(n => {
-        if (!visitedIds.has(n.id)) {
-          let reason = "Not connected to the selected parent node via edges.";
-          if (getNodeLevelLocal(n) === 1 && n.id !== selectedNode.id) {
-            reason = "Different top-level parent node; traversal is isolated to the selected project tree.";
-          }
-          debugExcluded.push({
-            label: n.label || n.id,
-            id: n.id,
-            reason
-          });
-        }
+    if (selLvl === 3) {
+      // Task: Related work is the connected Workstream (Level 2)
+      relatedNodes = allActiveNodes.filter(n => {
+        if (getNodeLevelLocal(n) !== 2) return false;
+        return edges.some(e => 
+          (e.source === selectedNode.id && e.target === n.id) || 
+          (e.target === selectedNode.id && e.source === n.id)
+        );
+      });
+    } else if (selLvl === 2) {
+      // Workstream: Related work is the connected Project (Level 1)
+      relatedNodes = allActiveNodes.filter(n => {
+        if (getNodeLevelLocal(n) !== 1) return false;
+        return edges.some(e => 
+          (e.source === selectedNode.id && e.target === n.id) || 
+          (e.target === selectedNode.id && e.source === n.id)
+        );
+      });
+    } else if (selLvl === 1) {
+      // Project:
+      // Option A: Another doppelganger's project of the same or similar name
+      const cleanSelLabel = stripLabelNumbering(selectedNode.label).toLowerCase().trim();
+      const otherProjectsSameName = allActiveNodes.filter(n => {
+        if (getNodeLevelLocal(n) !== 1) return false;
+        if (n.id === selectedNode.id) return false;
+        const h = (n.doppelgangerHandle || (n as any).ownerHandle || "").toLowerCase().trim();
+        if (h === selHandle && h !== "") return false;
+        const cleanNodeLabel = stripLabelNumbering(n.label).toLowerCase().trim();
+        return cleanSelLabel === cleanNodeLabel || cleanSelLabel.includes(cleanNodeLabel) || cleanNodeLabel.includes(cleanSelLabel);
       });
 
-      console.log("=== V2 GUIDED FLOW PROJECT NOTES RETRIEVAL DEBUG ===");
-      console.log("Nodes Discovered:", debugDiscovered);
-      console.log("Nodes Returned (notes included):", debugReturned);
-      console.log("Nodes Excluded:", debugExcluded.map(e => `${e.label} (ID: ${e.id}) - Reason: ${e.reason}`));
-      console.log("====================================================");
+      // Option B: Workstreams of another doppelganger connected to the current doppelganger's project or workstreams connected to this project
+      const currentWorkstreams = allActiveNodes.filter(n => 
+        getNodeLevelLocal(n) === 2 && 
+        (n.doppelgangerHandle || (n as any).ownerHandle || "").toLowerCase().trim() === selHandle &&
+        edges.some(e => 
+          (e.source === selectedNode.id && e.target === n.id) || 
+          (e.target === selectedNode.id && e.source === n.id)
+        )
+      );
 
-      return graphState.notes.filter((m: any) => visitedIds.has(m.node_id || m.nodeId));
-    } else {
-      // Non-parent node: return notes from the selected node itself
-      const debugDiscovered = [`${selectedNode.label || selectedNode.id} (ID: ${selectedNode.id}, Level: ${level})`];
-      const debugReturned = [`${selectedNode.label || selectedNode.id} (ID: ${selectedNode.id}, Level: ${level})`];
-      const debugExcluded = allActiveNodes
-        .filter(n => n.id !== selectedNode.id)
-        .map(n => ({
-          label: n.label || n.id,
-          id: n.id,
-          reason: "Not the selected node."
-        }));
+      const otherConnectedWorkstreams = allActiveNodes.filter(n => {
+        if (getNodeLevelLocal(n) !== 2) return false;
+        const h = (n.doppelgangerHandle || (n as any).ownerHandle || "").toLowerCase().trim();
+        if (h === selHandle && h !== "") return false;
+        
+        const connectedToProject = edges.some(e => 
+          (e.source === selectedNode.id && e.target === n.id) || 
+          (e.target === selectedNode.id && e.source === n.id)
+        );
+        if (connectedToProject) return true;
+        
+        const connectedToCurrentWorkstream = currentWorkstreams.some(cw => 
+          edges.some(e => 
+            (e.source === cw.id && e.target === n.id) || 
+            (e.target === cw.id && e.source === n.id)
+          )
+        );
+        return connectedToCurrentWorkstream;
+      });
 
-      console.log("=== V2 GUIDED FLOW PROJECT NOTES RETRIEVAL DEBUG (Single Node) ===");
-      console.log("Nodes Discovered:", debugDiscovered);
-      console.log("Nodes Returned:", debugReturned);
-      console.log("Nodes Excluded:", debugExcluded.map(e => `${e.label} (ID: ${e.id}) - Reason: ${e.reason}`));
-      console.log("==================================================================");
-
-      return graphState.notes.filter((m: any) => m.node_id === selectedNode.id || m.nodeId === selectedNode.id);
+      // Combine and filter duplicates
+      const combined = [...otherProjectsSameName, ...otherConnectedWorkstreams];
+      const seenIds = new Set<string>();
+      relatedNodes = combined.filter(n => {
+        if (seenIds.has(n.id)) return false;
+        seenIds.add(n.id);
+        return true;
+      });
     }
-  }, [selectedNode, graphState?.notes, graphState?.activeNodes, graphState?.edges]);
+
+    let relatedItems: any[] = relatedNodes
+      .filter(checkAccess)
+      .map(oppNode => ({
+        id: oppNode.id,
+        label: oppNode.label,
+        summary: oppNode.summary || oppNode.notes || ""
+      }));
+
+    // 4. Generate fresh insights from the selected item's content only.
+    let insights: string[] = [];
+    const contentText = `${selectedNode.label} ${selectedNode.summary} ${selectedNode.notes || ""} ${primaryNotesText}`.toLowerCase();
+    
+    // Do not generate insights for node-1.0 Mobile App Redesign
+    if (selectedNode.id !== "node-1.0") {
+      if (contentText.includes("friction") || contentText.includes("navigation")) {
+        insights.push("Targeting consistency in visual pattern styling and navigation layouts to streamline user flows.");
+      }
+      if (contentText.includes("offline") || contentText.includes("sqlite") || contentText.includes("sync")) {
+        insights.push("Requires local persistence auditing to secure caching capabilities and recover buffers.");
+      }
+      if (contentText.includes("timeline") || contentText.includes("milestone")) {
+        insights.push("Milestone tracking is configured for bi-weekly check-ins leading to beta launch readiness.");
+      }
+      if (contentText.includes("procurement") || contentText.includes("vendor")) {
+        insights.push("Onboarding external specialists requires due diligence on statement-of-work parameters.");
+      }
+      if (contentText.includes("typography") || contentText.includes("kinetic")) {
+        insights.push("Investigating accessibility and emotional expressions via animated typography systems.");
+      }
+      
+      if (insights.length === 0 && selectedNode.summary) {
+        insights.push(`Prioritizing execution of milestones for ${selectedNode.label} to align with design standards.`);
+      }
+    }
+
+    const createdDate = selectedNode.isShared
+      ? "May 10, 2026"
+      : getNoteDate(ownNotes[0]?.source_origin || "Journal_v1");
+
+    const isShared = (selectedNode as any).isShared;
+    const decText = isShared
+      ? `${(selectedNode as any).relationshipSummary || ""}\n\nRelated Areas: ${(selectedNode as any).relatedAreas?.join(", ") || ""}`
+      : (selectedNode.id === "node-1.0" ? "" : primaryNotesText);
+
+    // 5. Render the panel
+    setPanelDetails({
+      decText,
+      created: createdDate,
+      notes: selectedNode.notes || "",
+      memories: selectedNode.id === "node-1.0" ? [] : ownNotes.map((m: any) => m.content),
+      relatedWork: relatedItems,
+      insights
+    });
+  }, [selectedNode, graphState?.notes, graphState?.memories, graphState?.activeNodes, graphState?.edges, unlockedTokens]);
+
+  const nodeNotes = useMemo(() => {
+    return panelDetails?.memories || [];
+  }, [panelDetails]);
 
   const connectionsCount = useMemo(() => {
     if (!selectedNode || !graphState?.edges) return 0;
@@ -1860,12 +1983,25 @@ export default function V2GuidedFlow({
         >
           {v2Threads.map((thread, index) => {
             const isCurrentlyFocused = activeThread?.id === thread.id;
-            const isStreamingActive = isCurrentlyFocused && streamState !== "completed";
+            const isStreamingActive = isCurrentlyFocused && (streamState === "topic-streaming" || streamState === "answer-streaming");
             const currentTopic = isStreamingActive 
               ? (displayedTopic ? toTitleCase(displayedTopic) : "")
               : (thread.topicTitle ? toTitleCase(thread.topicTitle) : "");
             const currentAnswer = isStreamingActive ? displayedAnswer : thread.answer;
-            const isLoadingState = isCurrentlyFocused ? (streamState === "loading") : thread.isQuerying;
+            const isRateLimitError = !!thread.answer && (
+              thread.answer.toLowerCase().includes("rate limit") || 
+              thread.answer.toLowerCase().includes("quota") ||
+              thread.answer.toLowerCase().includes("resource_exhausted") ||
+              thread.answer.toLowerCase().includes("429") ||
+              thread.answer.toLowerCase().includes("error during inference") ||
+              thread.answer.toLowerCase().includes("grounding endpoint") ||
+              thread.answer.toLowerCase().includes("failed to contact")
+            );
+            const hasAnswerContent = !!currentAnswer && currentAnswer !== "Searching notes and generating response...";
+            const isLoadingState = (isCurrentlyFocused ? (streamState === "loading") : thread.isQuerying) && 
+                                   !hasAnswerContent && 
+                                   !isRateLimitError && 
+                                   (!thread.progressPercent || thread.progressPercent < 95);
             const metrics = scrollMetrics[thread.id];
             
             // ANTI-BLANKING: Force active or newest thread to have immediate visibility block and clear state
@@ -1954,6 +2090,7 @@ export default function V2GuidedFlow({
                   <span className="text-[10px] font-mono text-zinc-500 self-start">
                     {thread.timestamp}
                   </span>
+                  <div className="h-2" />
                 </div>
 
                 {/* 2. THE HARDWARE-ACCELERATED CLIPPING CONTAINER (VIEWPORT) */}
@@ -2064,6 +2201,31 @@ export default function V2GuidedFlow({
                       >
                         {isLoadingState ? (
                           <QueryProgress percent={thread.progressPercent} phase={thread.progressPhase} />
+                        ) : isRateLimitError ? (
+                          <div className="text-zinc-200 text-sm font-sans w-full text-left">
+                            <div className="flex items-start gap-2.5">
+                              <span className="text-lg leading-none select-none text-amber-500">⚠️</span>
+                              <div>
+                                <p className="font-bold text-zinc-100">AI Provider Rate Limits Reached</p>
+                                <p className="mt-1 text-zinc-300 leading-relaxed text-xs">
+                                  The current model has exceeded its API rate limit or free tier quota.
+                                </p>
+                                <p className="mt-2 text-zinc-300 leading-relaxed text-xs">
+                                  To resolve this, open{" "}
+                                  <button 
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      onOpenSettings?.();
+                                    }}
+                                    className="underline hover:text-white font-bold cursor-pointer bg-transparent border-none p-0 inline-flex"
+                                  >
+                                    Settings
+                                  </button>{" "}
+                                  and try switching to a different **AI Provider** (such as <strong>LM Studio</strong> to run locally without limits) or try a lower-tier Gemini model (like <strong>gemini-3.1-flash-lite</strong> or <strong>gemini-2.5-flash-image</strong>).
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         ) : (
                           <p className="whitespace-pre-line">{currentAnswer}</p>
                         )}
@@ -2073,7 +2235,7 @@ export default function V2GuidedFlow({
                       {thread.referencedNodes && thread.referencedNodes.length > 0 && (
                         <motion.div 
                           initial={{ opacity: 0, y: 6 }}
-                          animate={!thread.isQuerying ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.25, duration: 0.35, ease: "easeOut" }}
                           className="mt-[18px] pt-[18px] border-t border-white/20 flex flex-col gap-1.5"
                         >
@@ -2239,20 +2401,19 @@ export default function V2GuidedFlow({
             padding: "24px"
           }}
         >
-          {/* Header */}
-          <div className="flex items-center justify-end pb-3">
-            <button
-              type="button"
-              onClick={() => onSelectNode(null)}
-              className="p-1.5 rounded-lg bg-[#141417]/80 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition cursor-pointer flex items-center justify-center shadow-md active:scale-95"
-              title="Collapse and Close Panel"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Absolute Close Button */}
+          <button
+            type="button"
+            onClick={() => onSelectNode(null)}
+            className="absolute top-6 right-6 p-1.5 rounded-lg bg-[#141417]/80 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition cursor-pointer flex items-center justify-center shadow-md active:scale-95"
+            style={{ zIndex: 30 }}
+            title="Collapse and Close Panel"
+          >
+            <X className="w-4 h-4" />
+          </button>
 
           {/* Label */}
-          <div className="space-y-1 pt-6">
+          <div className="space-y-1 pr-8">
             <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">CONTEXT</div>
             <h2 className="text-sm font-semibold text-zinc-100 tracking-tight leading-snug">
               {formatNodeLabel(selectedNode.label)}
@@ -2260,55 +2421,83 @@ export default function V2GuidedFlow({
           </div>
 
           {/* Node Summary */}
-          <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-600 mt-4">
+          <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-650 mt-4">
             <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Summary</div>
             <div className="text-xs text-zinc-300 leading-relaxed font-sans">
               {selectedNode.summary}
             </div>
           </div>
 
-          {/* Project Notes section */}
-          {selectedNode.notes && (
-            <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-600 mt-1">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Notes</div>
-              <div className="text-xs text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap">
-                {selectedNode.notes}
-              </div>
+          {/* Details Section (combined notes & details) */}
+          <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-650 mt-1">
+            <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Details</div>
+            <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
+              {selectedNode.notes && (
+                <div className="text-xs text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap pb-2 border-b border-zinc-850">
+                  {selectedNode.notes}
+                </div>
+              )}
+              {panelDetails?.memories && panelDetails.memories.length > 0 && (
+                <div className="space-y-2">
+                  {panelDetails.memories.map((content: string, idx: number) => (
+                    <div key={idx} className="text-xs text-[#A1A1AA] leading-relaxed font-sans whitespace-pre-wrap">
+                      {content}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!selectedNode.notes && (!panelDetails?.memories || panelDetails.memories.length === 0) && (
+                <div className="text-xs text-zinc-500 italic">No additional details recorded.</div>
+              )}
+              {panelDetails?.insights && panelDetails.insights.length > 0 && (
+                <div className="border-t border-zinc-850 pt-2 text-[11px] leading-relaxed">
+                  <div className="text-[8px] font-bold text-[#2DD4BF] uppercase tracking-wider mb-1 font-mono">Derived Insights</div>
+                  <ul className="list-disc list-inside text-zinc-400 space-y-0.5">
+                    {panelDetails.insights.map((insight: string, idx: number) => (
+                      <li key={idx} className="marker:text-[#2DD4BF]">{insight}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          {/* Note Details */}
-          {nodeNotes.length > 0 && (
-            <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-600 mt-1">
-              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">DETAILS</div>
-              <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
-                {nodeNotes.map((mem: any, idx: number) => (
-                  <div key={idx} className="text-xs text-zinc-300 leading-relaxed font-sans whitespace-pre-wrap">
-                    {mem.content}
+          {/* Related Work Section */}
+          {panelDetails?.relatedWork && panelDetails.relatedWork.length > 0 && (
+            <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-650 mt-1">
+              <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 font-semibold">Related Work:</div>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {panelDetails.relatedWork.map((work: any) => (
+                  <div key={work.id} className="bg-[#141417]/30 p-2.5 rounded-lg border border-zinc-800">
+                    <div className="text-xs font-bold text-zinc-200">{work.label}</div>
+                    {work.summary && <p className="text-[11px] text-zinc-400 mt-1">{work.summary}</p>}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Node metadata info */}
+          {/* Node metadata info (Properties) */}
           <div className="space-y-2 mt-2">
-            <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 font-semibold">Additional Info:</div>
-            <div className="flex flex-wrap gap-2 text-[10px] font-mono">
-              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg flex gap-1 items-center">
-                <span className="text-zinc-500">Level: </span>
-                <span className="text-zinc-300 font-extrabold">{selectedNode.level || (selectedNode.weight >= 2.5 ? 1 : (selectedNode.weight >= 1.5 ? 2 : 3))}</span>
+            <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 font-semibold">Properties:</div>
+            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg flex flex-col gap-0.5">
+                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Level</span>
+                <span className="text-zinc-300 font-semibold">{(() => {
+                  const lvl = selectedNode.level || (selectedNode.weight >= 2.5 ? 1 : (selectedNode.weight >= 1.5 ? 2 : 3));
+                  return lvl === 1 ? "Project" : lvl === 2 ? "Workstream" : "Task";
+                })()}</span>
               </div>
-              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg flex gap-1 items-center">
-                <span className="text-zinc-500">Priority: </span>
+              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg flex flex-col gap-0.5">
+                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Priority</span>
                 <span className="text-[#2DD4BF] font-extrabold">{selectedNode.priority || 3}</span>
               </div>
-              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg">
-                <span className="text-zinc-500">Visibility: </span>
-                <span className="text-zinc-300 uppercase">{selectedNode.visibility_status}</span>
+              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg flex flex-col gap-0.5">
+                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Visibility</span>
+                <span className="text-zinc-300 uppercase">{selectedNode.visibility_status || "Public"}</span>
               </div>
-              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg">
-                <span className="text-zinc-500">Connections: </span>
+              <div className="p-2 border border-zinc-600 bg-[#141417] rounded-lg flex flex-col gap-0.5">
+                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Connections</span>
                 <span className="text-[#2DD4BF] font-extrabold">{connectionsCount}</span>
               </div>
             </div>

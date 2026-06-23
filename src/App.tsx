@@ -615,7 +615,7 @@ const DEFAULT_MOCK_STATE: StateBlueprint = {
     {
       id: "node-1.0",
       label: "Mobile App Redesign",
-      summary: "Top-level Project tracking macro mobile design deliverables.",
+      summary: "Project tracking macro mobile design deliverables.",
       notes: "Main redesign initiative focused on improving navigation consistency, reducing user friction, modernizing visual design patterns, and preparing for the upcoming mobile release candidate lockdown.",
       node_state: "active",
       visibility_status: "public",
@@ -657,7 +657,7 @@ const DEFAULT_MOCK_STATE: StateBlueprint = {
     {
       id: "node-2.0",
       label: "Kinetic Type Prototype V2",
-      summary: "Top-level Project for the motion typography study.",
+      summary: "Project for the motion typography study.",
       notes: "Experimental typography initiative exploring animated text systems, emotional expression through motion, accessibility considerations, and AI-generated presentation techniques.",
       node_state: "active",
       visibility_status: "public",
@@ -1443,9 +1443,77 @@ export function purgeNode1_1FromState(state: any): any {
   };
 }
 
+export function purgeCustomerSupportWebPortalFromState(state: any): any {
+  if (!state) return state;
+
+  const forbiddenSubstrings = [
+    "Customer Support Web Portal",
+    "Customer Support Portal",
+    "FAQ Section",
+    "24/7 AI Support Agent",
+    "Trouble Ticket Submission System",
+    "Multi-Channel Escalation",
+    "CRM / Helpdesk Integration",
+    "Dynamic Knowledge Base"
+  ];
+
+  const containsForbidden = (text: string) => {
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    return forbiddenSubstrings.some(sub => lower.includes(sub.toLowerCase()));
+  };
+
+  const activeNodes = (state.activeNodes || []).map((node: any) => {
+    if (!node) return node;
+
+    // Specifically repair Mobile App Redesign record directly
+    if (node.id === "node-1.0" || (node.label && node.label.toLowerCase().includes("mobile app redesign"))) {
+      const cleanNode = { 
+        ...node,
+        notes: "Main redesign initiative focused on improving navigation consistency, reducing user friction, modernizing visual design patterns, and preparing for the upcoming mobile release candidate lockdown.",
+        summary: "Project tracking macro mobile design deliverables.",
+        details: "",
+        generatedDetails: "",
+        analysis: null,
+        metadata: null,
+        aiSummary: "",
+        aiDetails: "",
+        enrichedContent: "",
+        interpretedContent: "",
+        sidebarContent: "",
+        cachedAnalysis: null,
+        derivedFields: null
+      };
+
+      return cleanNode;
+    }
+
+    return node;
+  });
+
+  const cleanNote = (n: any) => {
+    if (!n) return false;
+    const nodeId = n.node_id || n.nodeId;
+    if (nodeId === "node-1.0") {
+      return !containsForbidden(n.content);
+    }
+    return true;
+  };
+
+  const notes = (state.notes || []).filter(cleanNote);
+  const memories = (state.memories || []).filter(cleanNote);
+
+  return {
+    ...state,
+    activeNodes,
+    notes,
+    memories
+  };
+}
+
 export function migrateProfileData(state: any): any {
   if (!state) return state;
-  const purged = purgeNode1_1FromState(state);
+  const purged = purgeCustomerSupportWebPortalFromState(purgeNode1_1FromState(state));
   const activeNodes = (purged.activeNodes || []).map((node: any) => migrateNode(node));
   return {
     ...purged,
@@ -1456,51 +1524,51 @@ export function migrateProfileData(state: any): any {
 export function sanitizeEdges(
   nodes: { id: string; label: string; level?: number; weight?: number }[],
   edges: { source: string; target: string; relation?: string }[]
-): { source: string; target: string; relation?: string }[] {
-  if (!nodes || !edges) return [];
-  const nodeMap = new Map<string, { id: string; label: string; level?: number; weight?: number }>();
-  nodes.forEach(n => nodeMap.set(n.id, n));
-
-  return edges.filter(edge => {
-    const srcNode = nodeMap.get(edge.source);
-    const tgtNode = nodeMap.get(edge.target);
-    if (srcNode && tgtNode) {
-      const srcLvl = getNodeLevel(srcNode);
-      const tgtLvl = getNodeLevel(tgtNode);
-      // Strictly avoid level 3 connecting directly to level 1 (or vice versa)
-      if ((srcLvl === 1 && tgtLvl === 3) || (srcLvl === 3 && tgtLvl === 1)) {
-        return false;
-      }
-    }
-    return true;
-  });
-}
-
-export default function App() {
-  // Active Profile Handle and Dictionary for multi-brain hot-swapping
-  const [activeProfileHandle, setActiveProfileHandle] = useState<string>("@chris.adkins");
-  const [allProfilesDict, setAllProfilesDict] = useState<Record<string, StateBlueprint>>(() => {
-    const saved = localStorage.getItem("doppelganger_all_profiles_dict_v4");
-    if (saved) {
-      try {
-        const decoded = JSON.parse(saved);
-        if (decoded && typeof decoded === "object") {
-          const cleaned: Record<string, any> = {};
-          for (const key of Object.keys(decoded)) {
-            cleaned[key] = purgeNode1_1FromState(decoded[key]);
-          }
-          return cleaned;
-        }
-      } catch (e) {
-        // ignore fallback
-      }
-    }
-    return {
-      "@chris.adkins": DEFAULT_MOCK_STATE,
-      "@alex.morgan": ALEX_MOCK_STATE,
-      "@jordan.lee": JORDAN_MOCK_STATE
-    };
-  });
+ ): { source: string; target: string; relation?: string }[] {
+   if (!nodes || !edges) return [];
+   const nodeMap = new Map<string, { id: string; label: string; level?: number; weight?: number }>();
+   nodes.forEach(n => nodeMap.set(n.id, n));
+ 
+   return edges.filter(edge => {
+     const srcNode = nodeMap.get(edge.source);
+     const tgtNode = nodeMap.get(edge.target);
+     if (srcNode && tgtNode) {
+       const srcLvl = getNodeLevel(srcNode);
+       const tgtLvl = getNodeLevel(tgtNode);
+       // Strictly avoid level 3 connecting directly to level 1 (or vice versa)
+       if ((srcLvl === 1 && tgtLvl === 3) || (srcLvl === 3 && tgtLvl === 1)) {
+         return false;
+       }
+     }
+     return true;
+   });
+ }
+ 
+ export default function App() {
+   // Active Profile Handle and Dictionary for multi-brain hot-swapping
+   const [activeProfileHandle, setActiveProfileHandle] = useState<string>("@chris.adkins");
+   const [allProfilesDict, setAllProfilesDict] = useState<Record<string, StateBlueprint>>(() => {
+     const saved = localStorage.getItem("doppelganger_all_profiles_dict_v4");
+     if (saved) {
+       try {
+         const decoded = JSON.parse(saved);
+         if (decoded && typeof decoded === "object") {
+           const cleaned: Record<string, any> = {};
+           for (const key of Object.keys(decoded)) {
+             cleaned[key] = purgeCustomerSupportWebPortalFromState(purgeNode1_1FromState(decoded[key]));
+           }
+           return cleaned;
+         }
+       } catch (e) {
+         // ignore fallback
+       }
+     }
+     return {
+       "@chris.adkins": purgeCustomerSupportWebPortalFromState(DEFAULT_MOCK_STATE),
+       "@alex.morgan": purgeCustomerSupportWebPortalFromState(ALEX_MOCK_STATE),
+       "@jordan.lee": purgeCustomerSupportWebPortalFromState(JORDAN_MOCK_STATE)
+     };
+   });
 
   // Automatically sync profiles data to localStorage whenever updated
   useEffect(() => {
@@ -1931,7 +1999,7 @@ export default function App() {
     setIsNodeEdited(true);
     
     const activeNotesVal = updatedFields.notesText !== undefined ? updatedFields.notesText : editNodeNotes;
-    const activeDateVal = updatedFields.dateText !== undefined ? updatedFields.dateText : editNodeDate;
+    const activeDateVal = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
     // Update activeNodes
     const updatedNodes = graphState.activeNodes.map(n => {
@@ -3188,107 +3256,177 @@ export default function App() {
     return unlockedTokens.includes(keyHash);
   }, [selectedNodeObj, unlockedTokens]);
 
-  const nodeNotes = useMemo(() => {
-    if (!selectedNodeObj || !hasAccessToSelected) return [];
+  const [panelDetails, setPanelDetails] = useState<{
+    decText: string;
+    created: string;
+    query: string;
+    notes: string;
+    memories: string[];
+    relatedWork: { id: string; label: string; summary: string }[];
+    insights: string[];
+  } | null>(null);
 
+  useEffect(() => {
+    // 1. Clear previously rendered details immediately on selection change
+    setPanelDetails(null);
+
+    if (!selectedNodeObj || !hasAccessToSelected) {
+      return;
+    }
+
+    // 2. Load the selected item's data (notes/memories)
+    const allNotes = graphState?.notes || graphState?.memories || [];
+    const ownNotes = allNotes.filter(
+      (m: any) => m.node_id === selectedNodeObj.id || m.nodeId === selectedNodeObj.id
+    );
+    const primaryNotesText = ownNotes.map((m: any) => m.content).join("\n\n");
+
+    // 3. Resolve direct/indirect relationships based on Level rules
     const allActiveNodes = graphState?.activeNodes || [];
     const edges = graphState?.edges || [];
-    const level = getNodeLevel(selectedNodeObj);
+    const selLvl = getNodeLevel(selectedNodeObj);
+    const selHandle = (selectedNodeObj.doppelgangerHandle || (selectedNodeObj as any).ownerHandle || activeProfileHandle || "").toLowerCase().trim();
+    
+    let relatedNodes: any[] = [];
+    
+    const checkAccess = (oppNode: any) => {
+      const isIsolated = oppNode.isIsolated === true || oppNode.visibility_status === "isolated_passphrase";
+      const keyHash = (oppNode.access_key_hash || oppNode.accessKeyHash || "").toUpperCase().trim();
+      return !isIsolated || unlockedTokens.includes(keyHash);
+    };
 
-    if (level === 1) {
-      // Traverse the graph using the edges array starting from the selected parent (level === 1) node
-      const discoveredNodes: any[] = [];
-      const visitedIds = new Set<string>();
-      const queue: any[] = [selectedNodeObj];
-      visitedIds.add(selectedNodeObj.id);
-
-      while (queue.length > 0) {
-        const curr = queue.shift();
-        discoveredNodes.push(curr);
-
-        // Retrieve connected neighbor nodes through the edges array
-        const adjacentEdges = edges.filter(e => e.source === curr.id || e.target === curr.id);
-        adjacentEdges.forEach(e => {
-          const oppId = e.source === curr.id ? e.target : e.source;
-          if (!visitedIds.has(oppId)) {
-            const oppNode = allActiveNodes.find(n => n.id === oppId);
-            if (oppNode) {
-              const oppLvl = getNodeLevel(oppNode);
-              // Prevent traversal through other Level 1 top-level parent nodes
-              if (oppLvl === 1) {
-                return;
-              }
-              visitedIds.add(oppId);
-              queue.push(oppNode);
-            }
-          }
-        });
-      }
-
-      // Prepare debug logging
-      const debugDiscovered = discoveredNodes.map(n => `${n.label || n.id} (ID: ${n.id}, Level: ${getNodeLevel(n)})`);
-      const debugReturned = discoveredNodes.map(n => `${n.label || n.id} (ID: ${n.id}, Level: ${getNodeLevel(n)})`);
-      const debugExcluded: { label: string; id: string; reason: string }[] = [];
-
-      allActiveNodes.forEach(n => {
-        if (!visitedIds.has(n.id)) {
-          let reason = "Not connected to the selected parent node via edges.";
-          if (getNodeLevel(n) === 1 && n.id !== selectedNodeObj.id) {
-            reason = "Different top-level parent node; traversal is isolated to the selected project tree.";
-          }
-          debugExcluded.push({
-            label: n.label || n.id,
-            id: n.id,
-            reason
-          });
-        }
+    if (selLvl === 3) {
+      // Task: Related work is the connected Workstream (Level 2)
+      relatedNodes = allActiveNodes.filter(n => {
+        if (getNodeLevel(n) !== 2) return false;
+        return edges.some(e => 
+          (e.source === selectedNodeObj.id && e.target === n.id) || 
+          (e.target === selectedNodeObj.id && e.source === n.id)
+        );
+      });
+    } else if (selLvl === 2) {
+      // Workstream: Related work is the connected Project (Level 1)
+      relatedNodes = allActiveNodes.filter(n => {
+        if (getNodeLevel(n) !== 1) return false;
+        return edges.some(e => 
+          (e.source === selectedNodeObj.id && e.target === n.id) || 
+          (e.target === selectedNodeObj.id && e.source === n.id)
+        );
+      });
+    } else if (selLvl === 1) {
+      // Project:
+      // Option A: Another doppelganger's project of the same or similar name
+      const cleanSelLabel = stripLabelNumbering(selectedNodeObj.label).toLowerCase().trim();
+      const otherProjectsSameName = allActiveNodes.filter(n => {
+        if (getNodeLevel(n) !== 1) return false;
+        if (n.id === selectedNodeObj.id) return false;
+        const h = (n.doppelgangerHandle || (n as any).ownerHandle || "").toLowerCase().trim();
+        if (h === selHandle && h !== "") return false;
+        const cleanNodeLabel = stripLabelNumbering(n.label).toLowerCase().trim();
+        return cleanSelLabel === cleanNodeLabel || cleanSelLabel.includes(cleanNodeLabel) || cleanNodeLabel.includes(cleanSelLabel);
       });
 
-      console.log("=== PROJECT NOTES RETRIEVAL DEBUG ===");
-      console.log("Nodes Discovered:", debugDiscovered);
-      console.log("Nodes Returned (notes included):", debugReturned);
-      console.log("Nodes Excluded:", debugExcluded.map(e => `${e.label} (ID: ${e.id}) - Reason: ${e.reason}`));
-      console.log("=====================================");
+      // Option B: Workstreams of another doppelganger connected to the current doppelganger's project or workstreams connected to this project
+      const currentWorkstreams = allActiveNodes.filter(n => 
+        getNodeLevel(n) === 2 && 
+        (n.doppelgangerHandle || (n as any).ownerHandle || "").toLowerCase().trim() === selHandle &&
+        edges.some(e => 
+          (e.source === selectedNodeObj.id && e.target === n.id) || 
+          (e.target === selectedNodeObj.id && e.source === n.id)
+        )
+      );
 
-      const memories = graphState?.notes || graphState?.memories || [];
-      return memories.filter(m => visitedIds.has(m.node_id || m.nodeId));
-    } else {
-      // Non-parent node: retrieve notes from this single node
-      const debugDiscovered = [`${selectedNodeObj.label || selectedNodeObj.id} (ID: ${selectedNodeObj.id}, Level: ${level})`];
-      const debugReturned = [`${selectedNodeObj.label || selectedNodeObj.id} (ID: ${selectedNodeObj.id}, Level: ${level})`];
-      const debugExcluded = allActiveNodes
-        .filter(n => n.id !== selectedNodeObj.id)
-        .map(n => ({
-          label: n.label || n.id,
-          id: n.id,
-          reason: "Not the selected node."
-        }));
+      const otherConnectedWorkstreams = allActiveNodes.filter(n => {
+        if (getNodeLevel(n) !== 2) return false;
+        const h = (n.doppelgangerHandle || (n as any).ownerHandle || "").toLowerCase().trim();
+        if (h === selHandle && h !== "") return false;
+        
+        const connectedToProject = edges.some(e => 
+          (e.source === selectedNodeObj.id && e.target === n.id) || 
+          (e.target === selectedNodeObj.id && e.source === n.id)
+        );
+        if (connectedToProject) return true;
+        
+        const connectedToCurrentWorkstream = currentWorkstreams.some(cw => 
+          edges.some(e => 
+            (e.source === cw.id && e.target === n.id) || 
+            (e.target === cw.id && e.source === n.id)
+          )
+        );
+        return connectedToCurrentWorkstream;
+      });
 
-      console.log("=== PROJECT NOTES RETRIEVAL DEBUG (Single Node) ===");
-      console.log("Nodes Discovered:", debugDiscovered);
-      console.log("Nodes Returned:", debugReturned);
-      console.log("Nodes Excluded:", debugExcluded.map(e => `${e.label} (ID: ${e.id}) - Reason: ${e.reason}`));
-      console.log("==================================================");
-
-      const memories = graphState?.notes || graphState?.memories || [];
-      return memories.filter(m => m.node_id === selectedNodeObj.id || m.nodeId === selectedNodeObj.id);
+      // Combine and filter duplicates
+      const combined = [...otherProjectsSameName, ...otherConnectedWorkstreams];
+      const seenIds = new Set<string>();
+      relatedNodes = combined.filter(n => {
+        if (seenIds.has(n.id)) return false;
+        seenIds.add(n.id);
+        return true;
+      });
     }
-  }, [graphState?.notes, graphState?.memories, selectedNodeObj, hasAccessToSelected, graphState?.activeNodes, graphState?.edges]);
 
-  const nodeDetails = useMemo(() => {
-    if (!selectedNodeObj) return { decText: "", created: "", query: "" };
+    let relatedItems: any[] = relatedNodes
+      .filter(checkAccess)
+      .map(oppNode => ({
+        id: oppNode.id,
+        label: oppNode.label,
+        summary: oppNode.summary || oppNode.notes || ""
+      }));
+
+    // 4. Generate fresh insights from the selected item's content only.
+    let insights: string[] = [];
+    const contentText = `${selectedNodeObj.label} ${selectedNodeObj.summary} ${selectedNodeObj.notes || ""} ${primaryNotesText}`.toLowerCase();
+    
+    // Do not generate insights for node-1.0 Mobile App Redesign
+    if (selectedNodeObj.id !== "node-1.0") {
+      if (contentText.includes("friction") || contentText.includes("navigation")) {
+        insights.push("Targeting consistency in visual pattern styling and navigation layouts to streamline user flows.");
+      }
+      if (contentText.includes("offline") || contentText.includes("sqlite") || contentText.includes("sync")) {
+        insights.push("Requires local persistence auditing to secure caching capabilities and recover buffers.");
+      }
+      if (contentText.includes("timeline") || contentText.includes("milestone")) {
+        insights.push("Milestone tracking is configured for bi-weekly check-ins leading to beta launch readiness.");
+      }
+      if (contentText.includes("procurement") || contentText.includes("vendor")) {
+        insights.push("Onboarding external specialists requires due diligence on statement-of-work parameters.");
+      }
+      if (contentText.includes("typography") || contentText.includes("kinetic")) {
+        insights.push("Investigating accessibility and emotional expressions via animated typography systems.");
+      }
+      
+      if (insights.length === 0 && selectedNodeObj.summary) {
+        insights.push(`Prioritizing execution of milestones for ${selectedNodeObj.label} to align with design standards.`);
+      }
+    }
+
+    const createdDate = selectedNodeObj.isShared
+      ? "May 10, 2026"
+      : getNoteDate(ownNotes[0]?.source_origin || "Journal_v1");
+
     const isShared = (selectedNodeObj as any).isShared;
     const decText = isShared
       ? `${(selectedNodeObj as any).relationshipSummary || ""}\n\nRelated Areas: ${(selectedNodeObj as any).relatedAreas?.join(", ") || ""}`
-      : (nodeNotes.map(m => m.content).join("\n\n") || "No additional records found.");
-    
-    const created = isShared
-      ? "May 10, 2026"
-      : getNoteDate(nodeNotes[0]?.source_origin || "Journal_v1");
+      : (selectedNodeObj.id === "node-1.0" ? "" : primaryNotesText);
 
     const query = `tell me more about the project note: ${selectedNodeObj.label} - ${selectedNodeObj.summary} - ${decText}`;
-    return { decText, created, query };
-  }, [selectedNodeObj, nodeNotes]);
+
+    // 5. Render the panel
+    setPanelDetails({
+      decText,
+      created: createdDate,
+      query,
+      notes: selectedNodeObj.notes || "",
+      memories: selectedNodeObj.id === "node-1.0" ? [] : ownNotes.map((m: any) => m.content),
+      relatedWork: relatedItems,
+      insights
+    });
+  }, [selectedNodeObj, hasAccessToSelected, graphState?.notes, graphState?.memories, graphState?.activeNodes, graphState?.edges, unlockedTokens]);
+
+  const nodeDetails = useMemo(() => {
+    return panelDetails || { decText: "", created: "", query: "", notes: "", memories: [], relatedWork: [], insights: [] };
+  }, [panelDetails]);
 
   const isExternal = useMemo(() => {
     return !!(selectedNodeObj && (selectedNodeObj as any).isShared);
@@ -3821,6 +3959,7 @@ export default function App() {
           ownerHandle={ownerHandle}
           onSwitchProfile={handleSwitchProfile}
           openDoppelgangerTab={openDoppelgangerTab}
+          onOpenSettings={() => setShowSettingsModal(true)}
         />
       ) : (
         <main className="flex-1 p-4 lg:p-6 flex flex-col justify-stretch">
@@ -4206,14 +4345,78 @@ export default function App() {
 
                           <div>
                             <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 font-mono">Details</h4>
-                            <p className="text-zinc-350 leading-relaxed font-normal bg-[#1C1C21]/40 p-2.5 rounded-xl border border-zinc-800/40 whitespace-pre-wrap">
-                              {nodeDetails.decText}
-                            </p>
+                            <div className="text-zinc-350 leading-relaxed font-normal bg-[#1C1C21]/40 p-2.5 rounded-xl border border-zinc-800/40 whitespace-pre-wrap space-y-3">
+                              {selectedNodeObj.notes && (
+                                <div className="text-zinc-300 pb-2 border-b border-zinc-800/40">{selectedNodeObj.notes}</div>
+                              )}
+                              {nodeDetails.decText && nodeDetails.decText !== "No additional records found." ? (
+                                <div className="space-y-2">
+                                  {nodeDetails.memories?.map((mem: string, idx: number) => (
+                                    <p key={idx} className="text-zinc-350 text-xs">{mem}</p>
+                                  )) || <p>{nodeDetails.decText}</p>}
+                                </div>
+                              ) : (
+                                !selectedNodeObj.notes && <p className="text-zinc-500 italic">No additional details recorded.</p>
+                              )}
+                              
+                              {nodeDetails.insights && nodeDetails.insights.length > 0 && (
+                                <div className="border-t border-zinc-800/60 pt-2 text-[11px] leading-relaxed">
+                                  <div className="text-[8px] font-bold text-[#2DD4BF] uppercase tracking-wider mb-1 font-mono">Derived Insights</div>
+                                  <ul className="list-disc list-inside text-zinc-400 space-y-0.5">
+                                    {nodeDetails.insights.map((insight: string, idx: number) => (
+                                      <li key={idx} className="marker:text-[#2DD4BF]">{insight}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              <div className="border-t border-zinc-800/60 pt-2 text-[9px] text-zinc-500 font-mono">
+                                <span>Created: {nodeDetails.created}</span>
+                              </div>
+                            </div>
                           </div>
 
+                          {nodeDetails.relatedWork && nodeDetails.relatedWork.length > 0 && (
+                            <div>
+                              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 font-mono">Related Work</h4>
+                              <div className="space-y-2">
+                                {nodeDetails.relatedWork.map((work: any) => (
+                                  <div key={work.id} className="bg-[#1C1C21]/30 p-2.5 rounded-xl border border-zinc-800/40">
+                                    <div className="text-xs font-bold text-zinc-200">{work.label}</div>
+                                    {work.summary && <p className="text-[11px] text-zinc-400 mt-1">{work.summary}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           <div>
-                            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 font-mono">Created</h4>
-                            <p className="text-zinc-400 font-medium font-mono">{nodeDetails.created}</p>
+                            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 font-mono">Properties</h4>
+                            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                              <div className="p-2 border border-zinc-800 bg-[#1C1C21]/30 rounded-xl flex flex-col gap-0.5">
+                                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Level</span>
+                                <span className="text-zinc-300 font-semibold">{(() => {
+                                  const lvl = getNodeLevel(selectedNodeObj);
+                                  return lvl === 1 ? "Project" : lvl === 2 ? "Workstream" : "Task";
+                                })()}</span>
+                              </div>
+                              <div className="p-2 border border-zinc-800 bg-[#1C1C21]/30 rounded-xl flex flex-col gap-0.5">
+                                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Priority</span>
+                                <span className="text-zinc-300 font-semibold">{selectedNodeObj.priority || 3}</span>
+                              </div>
+                              <div className="p-2 border border-zinc-800 bg-[#1C1C21]/30 rounded-xl flex flex-col gap-0.5">
+                                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Visibility</span>
+                                <span className="text-zinc-300 font-semibold uppercase">{selectedNodeObj.visibility_status || "Public"}</span>
+                              </div>
+                              <div className="p-2 border border-zinc-800 bg-[#1C1C21]/30 rounded-xl flex flex-col gap-0.5">
+                                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Connections</span>
+                                <span className="text-zinc-300 font-semibold">{(() => {
+                                  const edges = graphState?.edges || [];
+                                  return edges.filter(e => e.source === selectedNodeObj.id || e.target === selectedNodeObj.id).length;
+                                })()}</span>
+                              </div>
+
+                            </div>
                           </div>
 
                           {selectedNodeObj.isShared && (
@@ -4513,7 +4716,17 @@ export default function App() {
                             <label htmlFor="journal-node-title" className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
                               Title
                             </label>
-                            {!selectedNodeId && (
+                            {selectedNodeId ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedNodeId(null);
+                                }}
+                                className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-mono text-[9px] font-bold uppercase border border-zinc-700 rounded-lg cursor-pointer transition select-none flex items-center gap-1 active:scale-95"
+                              >
+                                + New Note / Cancel
+                              </button>
+                            ) : (
                               <span className="text-[9px] text-[#2DD4BF] font-mono font-bold">
                                 [New Entry]
                               </span>
@@ -4540,17 +4753,6 @@ export default function App() {
                           />
                         </div>
 
-                        {/* System Tags Display */}
-                        {selectedNodeId && systemTags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-1 mb-1">
-                            {systemTags.map((tag, idx) => (
-                              <span key={idx} className="px-2.5 py-1 rounded-lg bg-zinc-900/80 text-[9px] font-mono text-zinc-300 border border-zinc-800 uppercase tracking-wider">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
                         {/* State / Summary Input */}
                         <div className="flex flex-col gap-1">
                           <label htmlFor="journal-node-summary" className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
@@ -4569,31 +4771,6 @@ export default function App() {
                               }
                             }}
                             placeholder={selectedNodeId ? "Edit summary..." : "Enter summary of what you did..."}
-                            className={`w-full bg-[#0D0D0F] border rounded-xl p-3 text-xs focus:outline-none transition-all ${
-                              selectedNodeId 
-                                ? "border-emerald-500/45 focus:border-[#2DD4BF] text-zinc-100 bg-[#141416]/50 shadow-[0_0_8px_rgba(45,212,191,0.06)]" 
-                                : "border-[#27272A] focus:border-[#2DD4BF]/50 text-zinc-200 placeholder-zinc-650 bg-[#0D0D0F]"
-                            }`}
-                          />
-                        </div>
-
-                        {/* Node Date Info Input */}
-                        <div className="flex flex-col gap-1">
-                          <label htmlFor="journal-node-date" className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                            {selectedNodeId ? (isNodeEdited ? "UPDATED" : "CREATED") : "DATE"}
-                          </label>
-                          <input 
-                            id="journal-node-date"
-                            type="text"
-                            value={editNodeDate}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setEditNodeDate(val);
-                              if (selectedNodeId) {
-                                handleUpdateNodeInGraph({ dateText: val });
-                              }
-                            }}
-                            placeholder={selectedNodeId ? "Edit date..." : "Enter date..."}
                             className={`w-full bg-[#0D0D0F] border rounded-xl p-3 text-xs focus:outline-none transition-all ${
                               selectedNodeId 
                                 ? "border-emerald-500/45 focus:border-[#2DD4BF] text-zinc-100 bg-[#141416]/50 shadow-[0_0_8px_rgba(45,212,191,0.06)]" 
@@ -5454,7 +5631,15 @@ export default function App() {
 
                   {/* Provider Radio Selector */}
                   <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider block">Select Global Inference Provider</label>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider block">Select Global Inference Provider</label>
+                      <div className="group relative cursor-pointer select-none">
+                        <span className="text-xs text-zinc-500 hover:text-zinc-300 font-mono">ⓘ</span>
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 hidden group-hover:block w-64 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-350 font-sans leading-relaxed shadow-2xl z-50">
+                          The generative LLM synthesizes natural language answers to user queries, reasons through follow-up conversations, and proposes graph modifications based on journal entries.
+                        </div>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-3 gap-1.5 font-sans">
                       {[
                         { id: "gemini", label: "Gemini", desc: "Google Cloud Client" },
@@ -5598,8 +5783,8 @@ export default function App() {
                       <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block font-mono">Embeddings Module</span>
                       <div className="group relative cursor-pointer select-none">
                         <span className="text-xs text-zinc-500 hover:text-zinc-300 font-mono">ⓘ</span>
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 hidden group-hover:block w-64 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-300 font-sans leading-relaxed shadow-2xl z-50">
-                          Converts text memories and search queries into mathematical vectors to enable semantic keyword searching. You can use a local model if loaded in LM Studio.
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 hidden group-hover:block w-64 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-350 font-sans leading-relaxed shadow-2xl z-50">
+                          The embedding model converts text queries and journal records into high-dimensional vector representations. Its core function is to measure semantic similarity, enabling the system to match search queries with contextually relevant database notes.
                         </div>
                       </div>
                     </div>
