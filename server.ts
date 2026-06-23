@@ -247,9 +247,11 @@ app.post("/api/ai-provider/capabilities", async (req, res) => {
 // ROUTE 1: Ingest owner journal entry and generate proposed compaction mutations
 app.post("/api/compaction", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    console.log("[Compaction API] Client disconnected. Aborting active AI request.");
-    controller.abort();
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      console.log("[Compaction API] Client disconnected. Aborting active AI request.");
+      controller.abort();
+    }
   });
 
   try {
