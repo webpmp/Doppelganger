@@ -271,7 +271,7 @@ Owner's New Journal Entry:
 "${journalEntry}"
 
 Strict Compaction Constraints:
-1. MAX 9 active nodes: You must keep total active nodes in the graph at <= 9. If the addition of new nodes exceeds 9, find older/less relevant active nodes and toggle their "node_state" to "archived". Also make sure they have a lower weight or archive flag.
+1. MAX 250 active nodes: You must keep total active nodes in the graph at <= 250. If the addition of new nodes exceeds 250, find older/less relevant active nodes and toggle their "node_state" to "archived". Also make sure they have a lower weight or archive flag.
 2. Sensitivity Check: Under certain conditions, if the narrative implies a highly sensitive team project, toggle its "visibility_status" to "isolated_passphrase" and set first class fields: "isIsolated": true, "access_key_hash": "[generate visual pass phrase token here, like STEALTH-OMEGA, NEBULA, or COBALT-PROJECT]", "accessKeyHash": "[same string]".
 Wait, generate a clear human-readable placeholder passcode string for the token (e.g. STEALTH-COBALT, CIPHER, SECRET-9) so that a visitor must supply this keyword to unlock the node.
 3. Node weights should be scaled from 0.5 to 3.0 based on activity/frequency of mentions.
@@ -291,7 +291,7 @@ Respond with valid JSON mapping the schema exactly.
         properties: {
           reasoning: {
             type: Type.STRING,
-            description: "AI reasoning detailing how the journal was evaluated, the 9-node display limit handled, any sensitivity triggered, and overall changes."
+            description: "AI reasoning detailing how the journal was evaluated, the 250-node display limit handled, any sensitivity triggered, and overall changes."
           },
           cards: {
             type: Type.ARRAY,
@@ -318,7 +318,7 @@ Respond with valid JSON mapping the schema exactly.
                     id: { type: Type.STRING },
                     label: { type: Type.STRING },
                     summary: { type: Type.STRING },
-                    node_state: { type: Type.STRING, description: "'active' or 'archived'. Max 9 active nodes in the array." },
+                    node_state: { type: Type.STRING, description: "'active' or 'archived'. Max 250 active nodes in the array." },
                     visibility_status: { type: Type.STRING, description: "'public' or 'isolated_passphrase'" },
                     access_key_hash: { type: Type.STRING, nullable: true },
                     accessKeyHash: { type: Type.STRING, nullable: true },
@@ -576,10 +576,10 @@ Respond with valid JSON mapping the schema exactly.
         }
       }
 
-      // Enforce 9 active nodes constraint
+      // Enforce 250 active nodes constraint
       const activeNodesCount = nextActiveNodes.filter((n: any) => n.node_state === "active").length;
-      if (activeNodesCount > 9) {
-        const excess = activeNodesCount - 9;
+      if (activeNodesCount > 250) {
+        const excess = activeNodesCount - 250;
         let candidates = nextActiveNodes.filter((n: any) => n.node_state === "active" && n.weight !== 3.0);
         candidates.sort((a: any, b: any) => (a.weight || 1) - (b.weight || 1));
 
@@ -591,7 +591,7 @@ Respond with valid JSON mapping the schema exactly.
             fallbackCards.push({
               type: "ARCHIVE_NODE",
               title: `Archive Project: ${actualNode.label}`,
-              description: `Enforced 9 active projects limit. Moved lower-priority project "${actualNode.label}" to history.`
+              description: `Enforced 250 active projects limit. Moved lower-priority project "${actualNode.label}" to history.`
             });
           }
         }
