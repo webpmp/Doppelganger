@@ -4581,11 +4581,17 @@ export default function App() {
 
                         {/* Notes Input */}
                         <div className="flex flex-col gap-1 relative flex-1">
-                          <label htmlFor="owner-journal" className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                            NOTES
-                          </label>
+                          <div className="flex justify-between items-center">
+                            <label htmlFor="owner-journal" className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
+                              NOTES
+                            </label>
+                            <span className="text-[9px] font-mono text-zinc-500">
+                              {(selectedNodeId ? editNodeNotes : journalText).length} / 1500
+                            </span>
+                          </div>
                           <textarea
                             id="owner-journal"
+                            maxLength={1500}
                             value={selectedNodeId ? editNodeNotes : journalText}
                             onChange={(e) => {
                               const val = e.target.value;
