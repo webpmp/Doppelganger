@@ -363,7 +363,12 @@ Respond with valid JSON mapping the schema exactly.
         responseSchema: schema
       });
 
-      parsedCompaction = JSON.parse(resultText.trim());
+      let cleanedText = resultText.trim();
+      if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText.replace(/^```(?:json)?\s*/i, "");
+        cleanedText = cleanedText.replace(/\s*```$/, "");
+      }
+      parsedCompaction = JSON.parse(cleanedText.trim());
     } catch (apiError: any) {
       console.warn("Compaction active provider failed, running local compaction fallback:", apiError.message || apiError);
       
@@ -378,86 +383,195 @@ Respond with valid JSON mapping the schema exactly.
       const fallbackCards: any[] = [];
       let reasoning = "⚠️ [Notice: AI provider fallback active] Processed entry algorithmically.";
 
-      let matchedNode: any = null;
-      let highestCount = 0;
-      for (const node of nextActiveNodes) {
-        if (node.node_state === "active") {
-          const lLower = node.label.toLowerCase();
-          const occurrence = lowerEntry.split(lLower).length - 1;
-          if (occurrence > highestCount) {
-            highestCount = occurrence;
-            matchedNode = node;
-          }
-        }
-      }
+      // Parse structured fields if input was compiled from fields
+      let parsedTitle = "";
+      let parsedSummary = "";
+      let parsedDate = "";
+      let parsedNotes = "";
 
-      if (matchedNode && highestCount > 0) {
-        matchedNode.weight = Math.min(3.0, (matchedNode.weight || 1.0) + 0.5);
-        nextNotes.push({
-          node_id: matchedNode.id,
-          content: entryText,
-          source_origin: "Journal_Entry"
-        });
-        fallbackCards.push({
-          type: "ADD_NOTE",
-          title: `Enriched node: ${matchedNode.label}`,
-          description: `Extracted work log for ${matchedNode.label} and logged narrative to persistent records.`
-        });
-      } else {
-        let extractedLabel = "System Sync";
-        const matches = entryText.match(/\b[A-Z][a-zA-Z0-9]{2,15}(?:\s+[A-Z][a-zA-Z0-9]{1,15})*\b/g);
-        if (matches && matches.length > 0) {
-          const validCandidates = matches.filter(m => !["I", "The", "And", "Friday", "Monday", "Today", "Yesterday", "June", "July", "August"].includes(m));
-          if (validCandidates.length > 0) extractedLabel = validCandidates[0];
-        }
+      const titleMatch = entryText.match(/^Title:\s*(.+)$/m);
+      const summaryMatch = entryText.match(/^Summary:\s*(.+)$/m);
+      const dateMatch = entryText.match(/^Date:\s*(.+)$/m);
+      const notesMatch = entryText.match(/^Notes:\s*([\s\S]+)$/m);
 
+      if (titleMatch) parsedTitle = titleMatch[1].trim();
+      if (summaryMatch) parsedSummary = summaryMatch[1].trim();
+      if (dateMatch) parsedDate = dateMatch[1].trim();
+      if (notesMatch) parsedNotes = notesMatch[1].trim();
+
+      const isStructured = !!(parsedTitle || parsedSummary || parsedNotes);
+
+      if (isStructured && parsedTitle) {
+        // Look for existing active node matching parsedTitle case-insensitively
+        let matchedNode = nextActiveNodes.find((n: any) => n.node_state === "active" && n.label.toLowerCase() === parsedTitle.toLowerCase());
+        
         const isSensitive = lowerEntry.includes("sensitive") || lowerEntry.includes("stealth") || lowerEntry.includes("private") || lowerEntry.includes("secret") || lowerEntry.includes("confidential");
         const passphrases = ["STEALTH-COBALT", "NEBULA-ZERO", "PROJECT-9", "CIPHER-OMEGA", "KRYPTON-KEY"];
         const pass = passphrases[Math.floor(Math.random() * passphrases.length)];
 
-        const newId = `node-${Date.now()}`;
-        const newNode = {
-          id: newId,
-          label: extractedLabel,
-          summary: `Automatic logs captured for workflow: ${extractedLabel}`,
-          node_state: "active",
-          visibility_status: isSensitive ? "isolated_passphrase" : "public",
-          access_key_hash: isSensitive ? pass : null,
-          accessKeyHash: isSensitive ? pass : null,
-          isIsolated: isSensitive,
-          weight: 1.0
-        };
+        if (matchedNode) {
+          matchedNode.weight = Math.min(3.0, (matchedNode.weight || 1.0) + 0.5);
+          if (parsedSummary) {
+            matchedNode.summary = parsedSummary;
+          }
+          if (isSensitive) {
+            matchedNode.visibility_status = "isolated_passphrase";
+            matchedNode.access_key_hash = pass;
+            matchedNode.accessKeyHash = pass;
+            matchedNode.isIsolated = true;
+          }
 
-        nextActiveNodes.push(newNode);
-        nextNotes.push({
-          node_id: newId,
-          content: entryText,
-          source_origin: "Journal_Entry"
-        });
-
-        fallbackCards.push({
-          type: "ADD_NODE",
-          title: `Ingest concept: ${extractedLabel}`,
-          description: `Extracted ${extractedLabel} as a new workflow node with weight 1.0.`
-        });
-
-        if (isSensitive) {
-          fallbackCards.push({
-            type: "SECURE_GATE_TRIGGERED",
-            title: `Secure Passphrase Generated`,
-            description: `Sensitivity trigger detected. Isolated node with passcode key "${pass}".`
+          nextNotes.push({
+            node_id: matchedNode.id,
+            content: parsedNotes || entryText,
+            source_origin: parsedDate || "Journal_Entry"
           });
-          reasoning += ` Isolated node passcode "${pass}".`;
+
+          fallbackCards.push({
+            type: "UPDATE_NODE",
+            title: `Update Project: ${matchedNode.label}`,
+            description: `Updated summary and appended new journal notes to project "${matchedNode.label}".`
+          });
+
+          if (isSensitive) {
+            fallbackCards.push({
+              type: "SECURE_GATE_TRIGGERED",
+              title: `Secure Passphrase Generated`,
+              description: `Sensitivity trigger detected. Isolated node with passcode key "${pass}".`
+            });
+            reasoning += ` Isolated node passcode "${pass}".`;
+          }
+        } else {
+          // Create a new node
+          const newId = `node-${Date.now()}`;
+          const newNode = {
+            id: newId,
+            label: parsedTitle,
+            summary: parsedSummary || `Automatic logs captured for workflow: ${parsedTitle}`,
+            node_state: "active",
+            visibility_status: isSensitive ? "isolated_passphrase" : "public",
+            access_key_hash: isSensitive ? pass : null,
+            accessKeyHash: isSensitive ? pass : null,
+            isIsolated: isSensitive,
+            weight: 1.0
+          };
+
+          nextActiveNodes.push(newNode);
+          nextNotes.push({
+            node_id: newId,
+            content: parsedNotes || entryText,
+            source_origin: parsedDate || "Journal_Entry"
+          });
+
+          fallbackCards.push({
+            type: "ADD_NODE",
+            title: `Add Project: ${parsedTitle}`,
+            description: `Created new project node "${parsedTitle}" with summary: "${parsedSummary || "None provided"}".`
+          });
+
+          if (isSensitive) {
+            fallbackCards.push({
+              type: "SECURE_GATE_TRIGGERED",
+              title: `Secure Passphrase Generated`,
+              description: `Sensitivity trigger detected. Isolated node with passcode key "${pass}".`
+            });
+            reasoning += ` Isolated node passcode "${pass}".`;
+          }
+
+          // Link to parent/ancestor workstream node if we have one
+          const subParent = nextActiveNodes.find((n: any) => n.node_state === "active" && n.weight === 2.0) || 
+                            nextActiveNodes.find((n: any) => n.node_state === "active" && n.weight === 3.0);
+          if (subParent) {
+            nextEdges.push({
+              source: subParent.id,
+              target: newId,
+              relation: "pertains_to"
+            });
+          }
+        }
+      } else {
+        // Standard text extraction fallback
+        let matchedNode: any = null;
+        let highestCount = 0;
+        for (const node of nextActiveNodes) {
+          if (node.node_state === "active") {
+            const lLower = node.label.toLowerCase();
+            const occurrence = lowerEntry.split(lLower).length - 1;
+            if (occurrence > highestCount) {
+              highestCount = occurrence;
+              matchedNode = node;
+            }
+          }
         }
 
-        const subParent = nextActiveNodes.find((n: any) => n.node_state === "active" && n.weight === 2.0) || 
-                          nextActiveNodes.find((n: any) => n.node_state === "active" && n.weight === 3.0);
-        if (subParent) {
-          nextEdges.push({
-            source: subParent.id,
-            target: newId,
-            relation: "pertains_to"
+        if (matchedNode && highestCount > 0) {
+          matchedNode.weight = Math.min(3.0, (matchedNode.weight || 1.0) + 0.5);
+          nextNotes.push({
+            node_id: matchedNode.id,
+            content: entryText,
+            source_origin: "Journal_Entry"
           });
+          fallbackCards.push({
+            type: "ADD_NOTE",
+            title: `Enriched project: ${matchedNode.label}`,
+            description: `Extracted work log for ${matchedNode.label} and logged narrative to persistent records.`
+          });
+        } else {
+          let extractedLabel = "System Sync";
+          const matches = entryText.match(/\b[A-Z][a-zA-Z0-9]{2,15}(?:\s+[A-Z][a-zA-Z0-9]{1,15})*\b/g);
+          if (matches && matches.length > 0) {
+            const validCandidates = matches.filter(m => !["I", "The", "And", "Friday", "Monday", "Today", "Yesterday", "June", "July", "August"].includes(m));
+            if (validCandidates.length > 0) extractedLabel = validCandidates[0];
+          }
+
+          const isSensitive = lowerEntry.includes("sensitive") || lowerEntry.includes("stealth") || lowerEntry.includes("private") || lowerEntry.includes("secret") || lowerEntry.includes("confidential");
+          const passphrases = ["STEALTH-COBALT", "NEBULA-ZERO", "PROJECT-9", "CIPHER-OMEGA", "KRYPTON-KEY"];
+          const pass = passphrases[Math.floor(Math.random() * passphrases.length)];
+
+          const newId = `node-${Date.now()}`;
+          const newNode = {
+            id: newId,
+            label: extractedLabel,
+            summary: `Automatic logs captured for workflow: ${extractedLabel}`,
+            node_state: "active",
+            visibility_status: isSensitive ? "isolated_passphrase" : "public",
+            access_key_hash: isSensitive ? pass : null,
+            accessKeyHash: isSensitive ? pass : null,
+            isIsolated: isSensitive,
+            weight: 1.0
+          };
+
+          nextActiveNodes.push(newNode);
+          nextNotes.push({
+            node_id: newId,
+            content: entryText,
+            source_origin: "Journal_Entry"
+          });
+
+          fallbackCards.push({
+            type: "ADD_NODE",
+            title: `Ingest concept: ${extractedLabel}`,
+            description: `Extracted ${extractedLabel} as a new workflow node with weight 1.0.`
+          });
+
+          if (isSensitive) {
+            fallbackCards.push({
+              type: "SECURE_GATE_TRIGGERED",
+              title: `Secure Passphrase Generated`,
+              description: `Sensitivity trigger detected. Isolated node with passcode key "${pass}".`
+            });
+            reasoning += ` Isolated node passcode "${pass}".`;
+          }
+
+          const subParent = nextActiveNodes.find((n: any) => n.node_state === "active" && n.weight === 2.0) || 
+                            nextActiveNodes.find((n: any) => n.node_state === "active" && n.weight === 3.0);
+          if (subParent) {
+            nextEdges.push({
+              source: subParent.id,
+              target: newId,
+              relation: "pertains_to"
+            });
+          }
         }
       }
 
