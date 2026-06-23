@@ -260,12 +260,18 @@ app.post("/api/compaction", async (req, res) => {
     const notes = graphState.notes || graphState.memories || [];
     const edges = graphState.edges || [];
 
+    const notesForAI = notes.map((m: any) => ({
+      node_id: m.node_id || m.nodeId,
+      source_origin: m.source_origin,
+      content: "[Detail text omitted for token optimization]"
+    }));
+
     const promptMessage = `
 You are the stream compaction engine for Doppelganger (an AI native knowledge replication platform).
 The owner is submitting a new daily work journal entry. Your task is to extract concepts, generate a proposed state, and provide reasonable change notes.
 
 Current State of Knowledge Graph:
-${JSON.stringify({ activeNodes, notes, edges }, null, 2)}
+${JSON.stringify({ activeNodes, notes: notesForAI, edges }, null, 2)}
 
 Owner's New Journal Entry:
 "${journalEntry}"
@@ -370,6 +376,43 @@ Respond with valid JSON mapping the schema exactly.
         cleanedText = cleanedText.replace(/\s*```$/, "");
       }
       parsedCompaction = JSON.parse(cleanedText.trim());
+
+      // Restore full note content bodies to prevent data loss
+      if (parsedCompaction.proposedState && Array.isArray(parsedCompaction.proposedState.notes)) {
+        const restoredNotes: any[] = [];
+        
+        parsedCompaction.proposedState.notes.forEach((n: any) => {
+          if (n.content === "[Detail text omitted for token optimization]") {
+            const original = notes.find((orig: any) => 
+              (orig.node_id === n.node_id || orig.nodeId === n.node_id) && 
+              orig.source_origin === n.source_origin
+            );
+            if (original) {
+              restoredNotes.push({
+                ...n,
+                content: original.content
+              });
+            } else {
+              restoredNotes.push(n);
+            }
+          } else {
+            restoredNotes.push(n);
+          }
+        });
+
+        // Ensure no historical notes were dropped or lost by the AI model during rewrite
+        notes.forEach((orig: any) => {
+          const alreadyExists = restoredNotes.some((rn: any) => 
+            (rn.node_id === orig.node_id || rn.node_id === orig.nodeId) && 
+            rn.source_origin === orig.source_origin
+          );
+          if (!alreadyExists) {
+            restoredNotes.push(orig);
+          }
+        });
+
+        parsedCompaction.proposedState.notes = restoredNotes;
+      }
     } catch (apiError: any) {
       console.warn("Compaction active provider failed, running local compaction fallback:", apiError.message || apiError);
       
