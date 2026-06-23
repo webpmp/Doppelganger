@@ -1671,6 +1671,29 @@ export default function App() {
   // Journal Input
   const [journalText, setJournalText] = useState("");
   const [isCompacting, setIsCompacting] = useState(false);
+  const [compactionStatus, setCompactionStatus] = useState("Analyzing daily journal narrative...");
+  useEffect(() => {
+    if (!isCompacting) {
+      setCompactionStatus("Analyzing daily journal narrative...");
+      return;
+    }
+    
+    const statuses = [
+      "Analyzing daily journal narrative...",
+      "Extracting project structures and work log mutations...",
+      "Updating active projects and relation edges...",
+      "Pre-computing semantic vector embeddings for long-term search...",
+      "Finalizing proposed project map adjustments..."
+    ];
+    
+    let idx = 0;
+    const interval = setInterval(() => {
+      idx = (idx + 1) % statuses.length;
+      setCompactionStatus(statuses[idx]);
+    }, 2500);
+    
+    return () => clearInterval(interval);
+  }, [isCompacting]);
 
   // Visitor Chat & View
   const [chatQuery, setChatQuery] = useState("");
@@ -4806,7 +4829,9 @@ export default function App() {
                         >
                           <Sparkles className="w-8 h-8 text-[#2DD4BF]" />
                         </motion.div>
-                        <span>Generating beautiful map suggestions...</span>
+                        <span className="font-mono text-[10px] uppercase text-[#2DD4BF] tracking-wider animate-pulse max-w-[280px] text-center">
+                          {compactionStatus}
+                        </span>
                       </div>
                     )}
 
