@@ -4586,12 +4586,12 @@ export default function App() {
                               NOTES
                             </label>
                             <span className="text-[9px] font-mono text-zinc-500">
-                              {(selectedNodeId ? editNodeNotes : journalText).length} / 1500
+                              {(selectedNodeId ? editNodeNotes : journalText).length} / 500
                             </span>
                           </div>
                           <textarea
                             id="owner-journal"
-                            maxLength={1500}
+                            maxLength={500}
                             value={selectedNodeId ? editNodeNotes : journalText}
                             onChange={(e) => {
                               const val = e.target.value;
