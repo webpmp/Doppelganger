@@ -266,6 +266,97 @@ app.post("/api/compaction", async (req, res) => {
       content: "[Detail text omitted for token optimization]"
     }));
 
+    const schema = {
+      type: Type.OBJECT,
+      description: "Proposed mutations to the knowledge graph state",
+      properties: {
+        reasoning: {
+          type: Type.STRING,
+          description: "Extremely brief 1-2 sentence explanation of changes. Do not write a long paragraph."
+        },
+        cards: {
+          type: Type.ARRAY,
+          description: "List of Proposed Modification cards showing individual adjustments for user preview.",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING, description: "Mutation type: 'ADD_NODE' | 'UPDATE_NODE' | 'ARCHIVE_NODE' | 'ADD_NOTE' | 'SECURE_GATE_TRIGGERED'" },
+              title: { type: Type.STRING, description: "Compact card title (e.g., 'Extract Node: Quantum Ledger')" },
+              description: { type: Type.STRING, description: "Human friendly description of the change and justification." }
+            },
+            required: ["type", "title", "description"]
+          }
+        },
+        mutations: {
+          type: Type.OBJECT,
+          description: "Delta changes to apply to the knowledge graph. Do not replicate the original unchanged nodes or notes.",
+          properties: {
+            addedNodes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  label: { type: Type.STRING },
+                  summary: { type: Type.STRING },
+                  node_state: { type: Type.STRING, description: "'active' or 'archived'." },
+                  visibility_status: { type: Type.STRING },
+                  access_key_hash: { type: Type.STRING, nullable: true },
+                  accessKeyHash: { type: Type.STRING, nullable: true },
+                  isIsolated: { type: Type.BOOLEAN },
+                  weight: { type: Type.NUMBER }
+                },
+                required: ["id", "label", "summary", "node_state", "visibility_status", "weight", "isIsolated"]
+              }
+            },
+            updatedNodes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  summary: { type: Type.STRING, nullable: true },
+                  node_state: { type: Type.STRING, nullable: true },
+                  visibility_status: { type: Type.STRING, nullable: true },
+                  weight: { type: Type.NUMBER, nullable: true }
+                },
+                required: ["id"]
+              }
+            },
+            archivedNodeIds: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            addedNotes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  node_id: { type: Type.STRING },
+                  content: { type: Type.STRING },
+                  source_origin: { type: Type.STRING }
+                },
+                required: ["node_id", "content", "source_origin"]
+              }
+            },
+            addedEdges: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  source: { type: Type.STRING },
+                  target: { type: Type.STRING },
+                  relation: { type: Type.STRING }
+                },
+                required: ["source", "target"]
+              }
+            }
+          }
+        }
+      },
+      required: ["reasoning", "cards", "mutations"]
+    };
+
     const promptMessage = `
 You are the stream compaction engine for Doppelganger (an AI native knowledge replication platform).
 The owner is submitting a new daily work journal entry. Your task is to extract concepts, generate a proposed state, and provide reasonable change notes.
@@ -286,102 +377,13 @@ Wait, generate a clear human-readable placeholder passcode string for the token 
 6. Never refer to projects, workstreams, tasks, or notes as "nodes" or "bubbles" in user-facing card titles, descriptions, or reasoning. Use clean terminology: e.g., "Project" (or "Workstream" / "Task") or "Note" / "Notes".
 
 Respond with valid JSON mapping the schema exactly.
+Expected JSON Schema format:
+${JSON.stringify(schema, null, 2)}
 `;
 
     let parsedCompaction: any;
     try {
       console.log(`[Doppelganger Compaction] Processing narrative through active provider: ${config.provider}`);
-      const schema = {
-        type: Type.OBJECT,
-        description: "Proposed mutations to the knowledge graph state",
-        properties: {
-          reasoning: {
-            type: Type.STRING,
-            description: "Extremely brief 1-2 sentence explanation of changes. Do not write a long paragraph."
-          },
-          cards: {
-            type: Type.ARRAY,
-            description: "List of Proposed Modification cards showing individual adjustments for user preview.",
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                type: { type: Type.STRING, description: "Mutation type: 'ADD_NODE' | 'UPDATE_NODE' | 'ARCHIVE_NODE' | 'ADD_NOTE' | 'SECURE_GATE_TRIGGERED'" },
-                title: { type: Type.STRING, description: "Compact card title (e.g., 'Extract Node: Quantum Ledger')" },
-                description: { type: Type.STRING, description: "Human friendly description of the change and justification." }
-              },
-              required: ["type", "title", "description"]
-            }
-          },
-          mutations: {
-            type: Type.OBJECT,
-            description: "Delta changes to apply to the knowledge graph. Do not replicate the original unchanged nodes or notes.",
-            properties: {
-              addedNodes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    label: { type: Type.STRING },
-                    summary: { type: Type.STRING },
-                    node_state: { type: Type.STRING, description: "'active' or 'archived'." },
-                    visibility_status: { type: Type.STRING },
-                    access_key_hash: { type: Type.STRING, nullable: true },
-                    accessKeyHash: { type: Type.STRING, nullable: true },
-                    isIsolated: { type: Type.BOOLEAN },
-                    weight: { type: Type.NUMBER }
-                  },
-                  required: ["id", "label", "summary", "node_state", "visibility_status", "weight", "isIsolated"]
-                }
-              },
-              updatedNodes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    summary: { type: Type.STRING, nullable: true },
-                    node_state: { type: Type.STRING, nullable: true },
-                    visibility_status: { type: Type.STRING, nullable: true },
-                    weight: { type: Type.NUMBER, nullable: true }
-                  },
-                  required: ["id"]
-                }
-              },
-              archivedNodeIds: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              addedNotes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    node_id: { type: Type.STRING },
-                    content: { type: Type.STRING },
-                    source_origin: { type: Type.STRING }
-                  },
-                  required: ["node_id", "content", "source_origin"]
-                }
-              },
-              addedEdges: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    source: { type: Type.STRING },
-                    target: { type: Type.STRING },
-                    relation: { type: Type.STRING }
-                  },
-                  required: ["source", "target"]
-                }
-              }
-            }
-          }
-        },
-        required: ["reasoning", "cards", "mutations"]
-      };
-
       const resultText = await aiProvider.generateResponse(promptMessage, {
         systemInstruction: "You are the taxonomy model builder double. Analyze the entry and output ONLY the mutations/changes required to modify the graph under the 'mutations' field. Keep the 'reasoning' field in your JSON response extremely brief (1-2 sentences maximum). Do not copy or replicate the unchanged parts of the graph.",
         responseSchema: schema

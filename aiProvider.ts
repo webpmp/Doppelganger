@@ -241,15 +241,7 @@ export class AIProvider {
     };
 
     if (options?.responseSchema) {
-      if (this.config.provider === "lm-studio") {
-        payload.response_format = {
-          type: "json_schema",
-          json_schema: {
-            name: "CompactionSchema",
-            schema: options.responseSchema
-          }
-        };
-      } else {
+      if (this.config.provider !== "lm-studio") {
         payload.response_format = { type: "json_object" };
       }
     }
