@@ -149,6 +149,7 @@ export class AIProvider {
     options?: {
       systemInstruction?: string;
       responseSchema?: any;
+      signal?: AbortSignal;
     }
   ): Promise<string> {
     const provider = this.config.provider;
@@ -217,6 +218,7 @@ export class AIProvider {
     options?: {
       systemInstruction?: string;
       responseSchema?: any;
+      signal?: AbortSignal;
     }
   ): Promise<string> {
     // Sanitize endpoint base URL (ensure it has /v1 if missing/standard, but respect raw input)
@@ -258,6 +260,7 @@ export class AIProvider {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
+        signal: options?.signal,
       });
 
       if (!response.ok) {

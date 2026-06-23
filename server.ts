@@ -246,6 +246,12 @@ app.post("/api/ai-provider/capabilities", async (req, res) => {
 
 // ROUTE 1: Ingest owner journal entry and generate proposed compaction mutations
 app.post("/api/compaction", async (req, res) => {
+  const controller = new AbortController();
+  req.on("close", () => {
+    console.log("[Compaction API] Client disconnected. Aborting active AI request.");
+    controller.abort();
+  });
+
   try {
     const { state, journalEntry } = req.body;
     const config = getRequestAIConfig(req.body);
@@ -386,7 +392,8 @@ ${JSON.stringify(schema, null, 2)}
       console.log(`[Doppelganger Compaction] Processing narrative through active provider: ${config.provider}`);
       const resultText = await aiProvider.generateResponse(promptMessage, {
         systemInstruction: "You are the taxonomy model builder double. Analyze the entry and output ONLY the mutations/changes required to modify the graph under the 'mutations' field. Keep the 'reasoning' field in your JSON response extremely brief (1-2 sentences maximum). Do not copy or replicate the unchanged parts of the graph.",
-        responseSchema: schema
+        responseSchema: schema,
+        signal: controller.signal
       });
 
       let cleanedText = resultText.trim();
