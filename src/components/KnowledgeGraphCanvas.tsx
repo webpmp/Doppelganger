@@ -821,41 +821,21 @@ export default function KnowledgeGraphCanvas({
     const linksEnter = linksJoin.enter()
       .append("line")
       .attr("class", "graph-link")
-      .attr("stroke", (d) => getLinkColor(d))
+      .attr("stroke", "var(--node-connection-color)")
       .attr("stroke-width", 2.0)
       .style("opacity", 0);
 
     const link = linksEnter.merge(linksJoin as any);
 
-    // Apply link styles immediately to updated links
-    linksJoin.style("opacity", (d: any) => {
-      if (workflowMode === 'v2') {
-        if (citedNodeIds && citedNodeIds.length > 0) {
-          const sId = typeof d.source === "object" ? d.source.id : d.source;
-          const tId = typeof d.target === "object" ? d.target.id : d.target;
-          const isCited = citedNodeIds.includes(sId) && citedNodeIds.includes(tId);
-          return isCited ? 0.75 : 0.35;
-        }
-        return 0.55;
-      }
-      return 0.55;
-    });
+    // Apply link styles immediately to updated links — always gray at rest
+    linksJoin
+      .attr("stroke", "var(--node-connection-color)")
+      .style("opacity", 0.45);
 
-    // Fade in entering links
+    // Fade in entering links as gray
     linksEnter.transition()
       .duration(600)
-      .style("opacity", (d: any) => {
-        if (workflowMode === 'v2') {
-          if (citedNodeIds && citedNodeIds.length > 0) {
-            const sId = typeof d.source === "object" ? d.source.id : d.source;
-            const tId = typeof d.target === "object" ? d.target.id : d.target;
-            const isCited = citedNodeIds.includes(sId) && citedNodeIds.includes(tId);
-            return isCited ? 0.75 : 0.35;
-          }
-          return 0.55;
-        }
-        return 0.55;
-      });
+      .style("opacity", 0.45);
 
     // Standard D3 Nodes Join
     const nodesJoin = nodesG.selectAll<SVGGElement, D3Node>("g.node-group")
@@ -903,9 +883,9 @@ export default function KnowledgeGraphCanvas({
         )
         .transition()
         .duration(150)
-        .attr("stroke", "var(--node-connection-color)")
-        .attr("stroke-width", 2.0)
-        .attr("opacity", 0.65);
+        .attr("stroke", (linkData) => getLinkColor(linkData))
+        .attr("stroke-width", 2.5)
+        .attr("opacity", 0.85);
     });
 
     nodesEnter.on("mouseout", function (event, d: any) {
@@ -925,20 +905,9 @@ export default function KnowledgeGraphCanvas({
         )
         .transition()
         .duration(150)
-        .attr("stroke", (linkData) => getLinkColor(linkData))
+        .attr("stroke", "var(--node-connection-color)")
         .attr("stroke-width", 2.0)
-        .attr("opacity", (linkData: any) => {
-          if (workflowMode === 'v2') {
-            if (citedNodeIds && citedNodeIds.length > 0) {
-              const sId = typeof linkData.source === "object" ? linkData.source.id : linkData.source;
-              const tId = typeof linkData.target === "object" ? linkData.target.id : linkData.target;
-              const isCited = citedNodeIds.includes(sId) && citedNodeIds.includes(tId);
-              return isCited ? 0.75 : 0.35;
-            }
-            return 0.55;
-          }
-          return 0.55;
-        });
+        .attr("opacity", 0.45);
     });
 
     // Append child visual components once on node creation

@@ -2226,6 +2226,12 @@ export default function V2GuidedFlow({
                               </div>
                             </div>
                           </div>
+                        ) : currentAnswer === "Searching notes and generating response..." ? (
+                          <div className="ai-thinking" title="Searching notes and generating response...">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                          </div>
                         ) : (
                           <p className="whitespace-pre-line">{currentAnswer}</p>
                         )}
@@ -2504,7 +2510,7 @@ export default function V2GuidedFlow({
           </div>
 
           {/* Doppelganger Creator */}
-          <div className="space-y-1.5 mt-4">
+          <div className="space-y-1.5" style={{ marginTop: "9px" }}>
             <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Doppelganger:</div>
             <div className="p-3.5 rounded-xl bg-[#141417] border border-zinc-600 flex items-center gap-3">
               {selectedNode.doppelgangerHandle && PROFILE_IMAGES[selectedNode.doppelgangerHandle] ? (

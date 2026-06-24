@@ -347,3 +347,37 @@ svg rect.bg-grid {
   overflow-y: visible !important;
   padding-right: 0 !important;
 }
+
+/* AI Thinking wave dots animation */
+.ai-thinking {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 6px;
+  padding: 8px 0;
+}
+.ai-thinking span {
+  width: 10px;
+  height: 10px;
+  background: #d4d4d8;
+  border-radius: 50%;
+  display: inline-block;
+  animation: waveDots 1.2s infinite ease-in-out;
+}
+.ai-thinking span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.ai-thinking span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes waveDots {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}

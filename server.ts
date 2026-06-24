@@ -1056,43 +1056,49 @@ User Input Query to Normalize:
 
     const mode = isExpandedMode ? "EXPANDED" : "RAW";
 
-    if (mode === "RAW") {
-      if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
-        targetProjectNodes = ["node-1.0"];
-      } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
-        targetProjectNodes = ["node-2.0"];
-      } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
-        targetProjectNodes = ["node-3.0"];
-      } else if (combinedQueryText.includes("branding")) {
-        targetProjectNodes = ["node-4.0"];
-      } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
-        targetProjectNodes = ["node-a10"];
-      } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
-        targetProjectNodes = ["node-a20"];
-      } else if (combinedQueryText.includes("aegis")) {
-        targetProjectNodes = ["node-j30"];
-      } else if (combinedQueryText.includes("cobalt")) {
-        targetProjectNodes = ["node-a30"];
-      }
-    } else {
-      if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
-        targetProjectNodes = ["node-1.0", "node-1.2", "node-1.3", "shared-alex-sync"];
-      } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
-        targetProjectNodes = ["node-2.0", "node-2.1"];
-      } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
-        targetProjectNodes = ["node-3.0", "node-j10", "node-j11"];
-      } else if (combinedQueryText.includes("branding")) {
-        targetProjectNodes = ["node-4.0", "node-j20"];
-      } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
-        targetProjectNodes = ["node-a10", "node-a11", "node-a12"];
-      } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
-        targetProjectNodes = ["node-a20", "node-a21"];
-      } else if (combinedQueryText.includes("aegis")) {
-        targetProjectNodes = ["node-j30"];
-      } else if (combinedQueryText.includes("cobalt")) {
-        targetProjectNodes = ["node-a30"];
-      }
+    // Dynamically resolve the project family by matching query keywords against node labels.
+    // Handles all stored level formats: number, string, or LevelOverride object {value: number}.
+    // This picks up any user-created nodes (not just hardcoded IDs).
+    const getStoredLevel = (n: any): number => {
+      const lv = n.level;
+      if (lv === undefined || lv === null) return n.weight >= 3 ? 1 : (n.weight >= 2 ? 2 : 3);
+      if (typeof lv === "number") return lv;
+      if (typeof lv === "string") return parseInt(lv, 10) || 0;
+      if (typeof lv === "object" && typeof lv.value === "number") return lv.value;
+      return 0;
+    };
+
+    const resolveProjectFamily = (keywords: string[]): string[] | null => {
+      const rootNode = accessibleNodes.find((n: any) =>
+        getStoredLevel(n) === 1 && keywords.some(kw => (n.label || n.title || "").toLowerCase().includes(kw))
+      );
+      if (!rootNode) return null;
+      const children = accessibleNodes
+        .filter((n: any) => n.parentId === rootNode.id || n.id === rootNode.id)
+        .map((n: any) => n.id);
+      return Array.from(new Set([rootNode.id, ...children]));
+    };
+
+    if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
+      targetProjectNodes = resolveProjectFamily(["mobile", "redesign"]);
+    } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("motion")) {
+      targetProjectNodes = resolveProjectFamily(["kinetic", "motion", "type"]);
+    } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
+      targetProjectNodes = resolveProjectFamily(["sprint"]);
+    } else if (combinedQueryText.includes("branding")) {
+      targetProjectNodes = resolveProjectFamily(["brand"]);
+    } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
+      targetProjectNodes = resolveProjectFamily(["platform", "developer"]);
+    } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
+      targetProjectNodes = resolveProjectFamily(["graphql", "stitching", "federated"]);
+    } else if (combinedQueryText.includes("aegis")) {
+      targetProjectNodes = resolveProjectFamily(["aegis"]);
+    } else if (combinedQueryText.includes("cobalt")) {
+      targetProjectNodes = resolveProjectFamily(["cobalt"]);
     }
+
+    console.log("[QUERY] resolvedProjectNodes:", targetProjectNodes);
+    console.log("[QUERY] accessibleNodes ids+levels:", accessibleNodes.map((n: any) => ({ id: n.id, label: n.label, level: n.level, parentId: n.parentId, weight: n.weight })));
 
     if (targetProjectNodes) {
       filteredAccessibleNodes = filteredAccessibleNodes.filter((node: any) =>
