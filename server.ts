@@ -1041,24 +1041,23 @@ User Input Query to Normalize:
     // Match project-specific queries to restrict to project nodes (Level 1, 2, 3 nodes belonging to that project)
     let targetProjectNodes: string[] | null = null;
 
-    const forceRawMode = qLower.includes("show notes") ||
-                         qLower.includes("list notes") ||
-                         qLower.includes("all notes");
-
-    const isExpandedMode = !forceRawMode && (
-                           qLower.includes("graph") || 
-                           qLower.includes("insight") || 
-                           qLower.includes("analysis") || 
-                           qLower.includes("traverse") || 
-                           qLower.includes("relationship") || 
-                           qLower.includes("expanded")
-                         );
+    const isExpandedMode = qLower.includes("graph") ||
+                           qLower.includes("insight") ||
+                           qLower.includes("analysis") ||
+                           qLower.includes("traverse") ||
+                           qLower.includes("relationship") ||
+                           qLower.includes("expanded");
 
     const mode = isExpandedMode ? "EXPANDED" : "RAW";
 
-    // Dynamically resolve the project family by matching query keywords against node labels.
-    // Handles all stored level formats: number, string, or LevelOverride object {value: number}.
-    // This picks up any user-created nodes (not just hardcoded IDs).
+    // ================================================================
+    // ACTIVATION ENGINE
+    // Deterministic, intent-based, pre-AI node activation.
+    // Rule 9: Same query + same data = same activated nodes, always.
+    // Rule 8: AI answer content NEVER controls node activation.
+    // ================================================================
+
+    // Normalize level from any stored format (number, string, LevelOverride)
     const getStoredLevel = (n: any): number => {
       const lv = n.level;
       if (lv === undefined || lv === null) return n.weight >= 3 ? 1 : (n.weight >= 2 ? 2 : 3);
@@ -1068,111 +1067,157 @@ User Input Query to Normalize:
       return 0;
     };
 
-    const resolveProjectFamily = (keywords: string[]): string[] | null => {
-      const rootNode = accessibleNodes.find((n: any) =>
-        getStoredLevel(n) === 1 && keywords.some(kw => (n.label || n.title || "").toLowerCase().includes(kw))
-      );
-      if (!rootNode) return null;
-      const children = accessibleNodes
-        .filter((n: any) => n.parentId === rootNode.id || n.id === rootNode.id)
-        .map((n: any) => n.id);
-      return Array.from(new Set([rootNode.id, ...children]));
+    // Step 1: Classify user intent (Rules 1 & 2)
+    const SUBTREE_PATTERNS = ["all", "everything", "complete", "entire", "full", "show all notes", "show all information", "summarize project", "tell me everything"];
+    const NETWORK_PATTERNS = ["related to", "connected to", "depends on", "cross", "reference", "find connected information", "what projects reference"];
+    const GLOBAL_PATTERNS = ["we know about this topic", "search all doppelgangers", "all available information"];
+
+    const intentType: "FOCUSED" | "SUBTREE" | "NETWORK" | "GLOBAL" = (() => {
+      if (GLOBAL_PATTERNS.some(p => qLower.includes(p))) return "GLOBAL";
+      if (NETWORK_PATTERNS.some(p => qLower.includes(p))) return "NETWORK";
+      if (SUBTREE_PATTERNS.some(p => qLower.includes(p))) return "SUBTREE";
+      return "FOCUSED";
+    })();
+
+    // Step 2: Locate project root node from query keywords
+    const PROJECT_KEYWORD_MAP: { queryTerms: string[]; labelTerms: string[] }[] = [
+      { queryTerms: ["mobile", "redesign"],                               labelTerms: ["mobile", "redesign"] },
+      { queryTerms: ["kinetic", "motion", "type prototype"],              labelTerms: ["kinetic"] },
+      { queryTerms: ["design sprint", "sprint planning", "sprints"],     labelTerms: ["sprint"] },
+      { queryTerms: ["branding", "brand update"],                         labelTerms: ["brand"] },
+      { queryTerms: ["platform developer", "developer experience"],       labelTerms: ["platform"] },
+      { queryTerms: ["graphql", "stitching", "federated"],               labelTerms: ["graphql", "federated"] },
+      { queryTerms: ["aegis"],                                            labelTerms: ["aegis"] },
+      { queryTerms: ["cobalt"],                                           labelTerms: ["cobalt"] },
+    ];
+
+    let matchedProjectRoot: any = null;
+    for (const mapping of PROJECT_KEYWORD_MAP) {
+      if (mapping.queryTerms.some(qt => combinedQueryText.includes(qt))) {
+        matchedProjectRoot = accessibleNodes.find((n: any) =>
+          getStoredLevel(n) === 1 &&
+          mapping.labelTerms.some(lt => (n.label || n.title || "").toLowerCase().includes(lt))
+        );
+        if (matchedProjectRoot) break;
+      }
+    }
+
+    // Step 3: Compute activated node IDs (locked — AI cannot modify this)
+    const computeActivatedNodes = (): string[] => {
+      const activated = new Set<string>();
+
+      if (intentType === "SUBTREE" && matchedProjectRoot) {
+        // Rule 1 & 5: Activate the root + ALL descendants recursively via parentId
+        activated.add(matchedProjectRoot.id);
+        const collectDescendants = (parentId: string) => {
+          accessibleNodes.forEach((n: any) => {
+            if (n.parentId === parentId && !activated.has(n.id)) {
+              activated.add(n.id);
+              collectDescendants(n.id);
+            }
+          });
+        };
+        collectDescendants(matchedProjectRoot.id);
+
+        // Also discover descendants via edges (for nodes that have no parentId field set)
+        const rootLevel = getStoredLevel(matchedProjectRoot);
+        const edgeTraverse = (nodeId: string) => {
+          edges.forEach((edge: any) => {
+            const src = typeof edge.source === "object" ? edge.source.id : edge.source;
+            const tgt = typeof edge.target === "object" ? edge.target.id : edge.target;
+            const otherId = src === nodeId ? tgt : (tgt === nodeId ? src : null);
+            if (!otherId || activated.has(otherId)) return;
+            const otherNode = accessibleNodes.find((n: any) => n.id === otherId);
+            if (otherNode && getStoredLevel(otherNode) > rootLevel) {
+              activated.add(otherId);
+              edgeTraverse(otherId);
+            }
+          });
+        };
+        edgeTraverse(matchedProjectRoot.id);
+
+        // Rule 6: Cross‑doppelganger activation
+        const rootLabel = (matchedProjectRoot.label || "").toLowerCase();
+        const rootKeywords = rootLabel.split(" ").filter((w: string) => w.length > 3);
+        accessibleNodes.forEach((n: any) => {
+          if (activated.has(n.id)) return;
+          const connProject = (n.connectedProject || "").toLowerCase();
+          const relAreas = Array.isArray(n.relatedAreas) ? n.relatedAreas.join(" ").toLowerCase() : "";
+          const nodeLabel = (n.label || "").toLowerCase();
+          const matchesCross = rootKeywords.some((kw: string) =>
+            connProject.includes(kw) || relAreas.includes(kw) || nodeLabel.includes(kw)
+          );
+          if (matchesCross) activated.add(n.id);
+        });
+      } else if (intentType === "NETWORK" && matchedProjectRoot) {
+        // Network mode: activate root and directly connected nodes (via edges) and cross‑doppelganger matches
+        activated.add(matchedProjectRoot.id);
+        // Direct connections via edges (one hop)
+        edges.forEach((edge: any) => {
+          const src = typeof edge.source === "object" ? edge.source.id : edge.source;
+          const tgt = typeof edge.target === "object" ? edge.target.id : edge.target;
+          if (src === matchedProjectRoot.id && !activated.has(tgt)) activated.add(tgt);
+          if (tgt === matchedProjectRoot.id && !activated.has(src)) activated.add(src);
+        });
+        // Cross‑doppelganger similar to SUBTREE
+        const rootLabel = (matchedProjectRoot.label || "").toLowerCase();
+        const rootKeywords = rootLabel.split(" ").filter((w: string) => w.length > 3);
+        accessibleNodes.forEach((n: any) => {
+          if (activated.has(n.id)) return;
+          const connProject = (n.connectedProject || "").toLowerCase();
+          const relAreas = Array.isArray(n.relatedAreas) ? n.relatedAreas.join(" ").toLowerCase() : "";
+          const nodeLabel = (n.label || "").toLowerCase();
+          const matchesCross = rootKeywords.some((kw: string) =>
+            connProject.includes(kw) || relAreas.includes(kw) || nodeLabel.includes(kw)
+          );
+          if (matchesCross) activated.add(n.id);
+        });
+      } else if (intentType === "GLOBAL") {
+        // Global mode: activate all nodes
+        accessibleNodes.forEach((n: any) => activated.add(n.id));
+      } else if (matchedProjectRoot) {
+        // FOCUSED mode (default): activate nodes matching query tokens within the project
+        const topicTokens = combinedQueryText.split(/\s+/).filter((w: string) => w.length > 3);
+        accessibleNodes.forEach((n: any) => {
+          if (n.id !== matchedProjectRoot.id && n.parentId !== matchedProjectRoot.id) return;
+          const searchText = [n.label, n.summary, n.notes].filter(Boolean).join(" ").toLowerCase();
+          const matchCount = topicTokens.filter((t: string) => searchText.includes(t)).length;
+          if (matchCount >= 1) activated.add(n.id);
+        });
+        activated.add(matchedProjectRoot.id);
+      } else {
+        // No project match — treat all filtered nodes as active
+        filteredAccessibleNodes.forEach((n: any) => activated.add(n.id));
+      }
+
+      // Rule 4: Ancestor activation — walk up every activated node's parentId chain
+      const snapshot = Array.from(activated);
+      snapshot.forEach(nodeId => {
+        let current: any = accessibleNodes.find((n: any) => n.id === nodeId);
+        let safety = 0;
+        while (current?.parentId && safety < 10) {
+          activated.add(current.parentId);
+          current = accessibleNodes.find((n: any) => n.id === current.parentId);
+          safety++;
+        }
+      });
+
+      return Array.from(activated);
     };
 
-    if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
-      targetProjectNodes = resolveProjectFamily(["mobile", "redesign"]);
-    } else if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("motion")) {
-      targetProjectNodes = resolveProjectFamily(["kinetic", "motion", "type"]);
-    } else if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
-      targetProjectNodes = resolveProjectFamily(["sprint"]);
-    } else if (combinedQueryText.includes("branding")) {
-      targetProjectNodes = resolveProjectFamily(["brand"]);
-    } else if (combinedQueryText.includes("platform developer") || combinedQueryText.includes("developer experience") || combinedQueryText.includes("cached layers")) {
-      targetProjectNodes = resolveProjectFamily(["platform", "developer"]);
-    } else if (combinedQueryText.includes("graphql") || combinedQueryText.includes("stitching") || combinedQueryText.includes("federated")) {
-      targetProjectNodes = resolveProjectFamily(["graphql", "stitching", "federated"]);
-    } else if (combinedQueryText.includes("aegis")) {
-      targetProjectNodes = resolveProjectFamily(["aegis"]);
-    } else if (combinedQueryText.includes("cobalt")) {
-      targetProjectNodes = resolveProjectFamily(["cobalt"]);
+    // Rule 9: Computed once before AI runs — deterministic
+    const activatedNodeIds: string[] = computeActivatedNodes();
+
+    // Narrow AI context to the activated scope
+    if (activatedNodeIds.length > 0 && matchedProjectRoot) {
+      filteredAccessibleNodes = filteredAccessibleNodes.filter((n: any) => activatedNodeIds.includes(n.id));
     }
 
-    console.log("[QUERY] resolvedProjectNodes:", targetProjectNodes);
-    console.log("[QUERY] accessibleNodes ids+levels:", accessibleNodes.map((n: any) => ({ id: n.id, label: n.label, level: n.level, parentId: n.parentId, weight: n.weight })));
-
-    if (targetProjectNodes) {
-      filteredAccessibleNodes = filteredAccessibleNodes.filter((node: any) =>
-        targetProjectNodes!.includes(node.id)
-      );
-    }
-
-    // Intent-based filtering for follow-up questions to focus on specific nodes
-    const isFollowUp = (Array.isArray(history) && history.length > 0) || (parentTopicTitle && String(parentTopicTitle).trim().length > 0);
-    let intentTargetNodeIds: string[] = [];
-    if (isFollowUp && mode !== "RAW") {
-      const qText = query.toLowerCase();
-      
-      if (combinedQueryText.includes("mobile") || combinedQueryText.includes("redesign")) {
-        if (qText.includes("who") || qText.includes("work") || qText.includes("team") || qText.includes("staff") || qText.includes("resource") || qText.includes("people") || qText.includes("designer") || qText.includes("researcher") || qText.includes("program manager") || qText.includes("resourcing")) {
-          intentTargetNodeIds = ["node-1.0", "node-1.3"]; // Mobile App Redesign + Team Resourcing
-        } else if (qText.includes("milestone") || qText.includes("timeline") || qText.includes("schedule") || qText.includes("when") || qText.includes("date") || qText.includes("lockdown") || qText.includes("kickoff") || qText.includes("release") || qText.includes("launch")) {
-          intentTargetNodeIds = ["node-1.0", "node-1.2"]; // Mobile App Redesign + Project Timeline
-        } else if (qText.includes("sync") || qText.includes("offline") || qText.includes("buffer") || qText.includes("sqlite") || qText.includes("alex")) {
-          intentTargetNodeIds = ["node-1.0", "shared-alex-sync"]; // Mobile App Redesign + Offline Sync
-        }
-      }
-      
-      if (combinedQueryText.includes("kinetic") || combinedQueryText.includes("type") || combinedQueryText.includes("motion")) {
-        if (qText.includes("vendor") || qText.includes("procure") || qText.includes("contract") || qText.includes("external") || qText.includes("studio") || qText.includes("animation")) {
-          intentTargetNodeIds = ["node-2.0", "node-2.1"]; // Kinetic Type + Vendor Procurement
-        }
-      }
-
-      if (combinedQueryText.includes("design sprint") || combinedQueryText.includes("sprints planning") || combinedQueryText.includes("sprint planning")) {
-        if (qText.includes("recruit") || qText.includes("participant") || qText.includes("user") || qText.includes("screener")) {
-          intentTargetNodeIds = ["node-3.0", "node-j10"]; // Design Sprints + Participant Recruiting
-        } else if (qText.includes("deliverable") || qText.includes("milestone") || qText.includes("output") || qText.includes("deck")) {
-          intentTargetNodeIds = ["node-3.0", "node-j11"]; // Design Sprints + Sprint Deliverables
-        }
-      }
-
-      if (intentTargetNodeIds.length > 0) {
-        filteredAccessibleNodes = filteredAccessibleNodes.filter((node: any) =>
-          intentTargetNodeIds.includes(node.id)
-        );
-      }
-    }
 
     const postProcessResponse = (q: string, parsedObj: any) => {
       if (!parsedObj) return parsedObj;
-      const ql = q.toLowerCase();
-      if (parsedObj.referenced_nodes) {
-        const allowedNodeIds = new Set(filteredAccessibleNodes.map((n: any) => n.id));
-        parsedObj.referenced_nodes = parsedObj.referenced_nodes.filter((id: string) => allowedNodeIds.has(id));
-        
-        // Ensure the topic node (first element in intentTargetNodeIds, e.g. parent) is cited alongside answer nodes
-        if (intentTargetNodeIds.length > 0 && mode !== "RAW") {
-          const topicNodeId = intentTargetNodeIds[0];
-          if (allowedNodeIds.has(topicNodeId) && !parsedObj.referenced_nodes.includes(topicNodeId)) {
-            parsedObj.referenced_nodes.unshift(topicNodeId);
-          }
-        }
-
-        // If the query asks for "all notes" or "all", automatically cite all accessible project nodes
-        if (mode !== "RAW" && (ql.includes("all notes") || ql.includes("show all notes") || (ql.includes("all") && ql.includes("notes")))) {
-          filteredAccessibleNodes.forEach((node: any) => {
-            if (!parsedObj.referenced_nodes.includes(node.id)) {
-              parsedObj.referenced_nodes.push(node.id);
-            }
-          });
-        }
-        
-        if (mode !== "RAW" && (ql.includes("mobile") || ql.includes("redesign")) && allowedNodeIds.has("shared-alex-sync")) {
-          if (!parsedObj.referenced_nodes.includes("shared-alex-sync")) {
-            parsedObj.referenced_nodes.push("shared-alex-sync");
-          }
-        }
-      }
+      // NOTE: referenced_nodes is controlled exclusively by the Activation Engine (activatedNodeIds).
+      // This function only performs text cleanup — it never modifies referenced_nodes.
       if (parsedObj.response_text) {
         // Enforce Natural Language Response Style
         let text = parsedObj.response_text;
@@ -1502,9 +1547,10 @@ Respond with valid JSON mapping the schema:
           res.write(`data: ${JSON.stringify({ type: "progress", percent: 95, phase: "Finalizing output" })}\n\n`);
         }
 
-        // Send metadata immediately
+        // Send activation metadata — referenced_nodes comes from the Activation Engine,
+        // not from the AI's response (Rule 8: answer content must not control node state)
         res.write(`data: ${JSON.stringify({ 
-          referenced_nodes: parsed.referenced_nodes || [], 
+          referenced_nodes: activatedNodeIds,
           routing_trigger: parsed.routing_trigger || false,
           topic_title: topicTitle
         })}\n\n`);
@@ -1606,6 +1652,8 @@ Respond with valid JSON mapping the schema:
       }
 
       parsed = postProcessResponse(query, parsed);
+      // Rule 8: Override AI-selected referenced_nodes with Activation Engine output
+      parsed.referenced_nodes = activatedNodeIds;
       parsed.topic_title = topicTitle;
 
       res.json(parsed);
