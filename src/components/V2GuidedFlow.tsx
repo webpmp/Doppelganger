@@ -227,7 +227,7 @@ function getFollowUpPlaceholder(lastQuestion?: string): string {
   return "Ask a follow up question...";
 }
 
-function TypewriterFadingText({ text }: { text: string }) {
+function TypewriterFadingText({ text, onFadeComplete }: { text: string; onFadeComplete?: () => void }) {
   const [displayedText, setDisplayedText] = useState("");
   const [isTypingDone, setIsTypingDone] = useState(false);
   const [isFading, setIsFading] = useState(false);
@@ -257,6 +257,15 @@ function TypewriterFadingText({ text }: { text: string }) {
       return () => clearTimeout(timeout);
     }
   }, [isTypingDone]);
+
+  useEffect(() => {
+    if (isFading && onFadeComplete) {
+      const timeout = setTimeout(() => {
+        onFadeComplete();
+      }, 10000); // 10s fade duration
+      return () => clearTimeout(timeout);
+    }
+  }, [isFading, onFadeComplete]);
 
   return (
     <div 
@@ -1785,7 +1794,7 @@ export default function V2GuidedFlow({
                         );
                       })
                     ) : (
-                      <TypewriterFadingText text="No favorite topics yet." />
+                      <TypewriterFadingText text="No favorite topics yet." onFadeComplete={() => setHeaderMode('topics')} />
                     )
                   )}
 
