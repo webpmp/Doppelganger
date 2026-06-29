@@ -2095,7 +2095,7 @@ export function sanitizeEdges(
   }>>({});
 
   // Profile context switching handler with UI cleanup and URL state synchronization
-  const handleSwitchProfile = (handle: string) => {
+  const handleSwitchProfile = (handle: string, preserveChat = false) => {
     const profile = PROFILES.find(p => p.handle.toLowerCase() === handle.toLowerCase());
     if (!profile) return;
     
@@ -2112,7 +2112,9 @@ export function sanitizeEdges(
 
     // Switch the active handle state (dictionary wrapper takes care of the graphState swap)
     setActiveProfileHandle(profile.handle);
-    setChatMessages([]);
+    if (!preserveChat) {
+      setChatMessages([]);
+    }
 
     // Restore target profile's saved workspace state if exists, or clear to defaults
     setProfileWorkspaces(prev => {
@@ -2658,7 +2660,7 @@ export function sanitizeEdges(
           "Accept": "text/event-stream" 
         },
         body: JSON.stringify({
-          state: graphState,
+          state: combinedGraphState,
           query: query,
           unlockedTokens: unlockedTokens,
           stream: true,
@@ -2733,6 +2735,29 @@ export function sanitizeEdges(
               // Ignore invalid lines, grab raw if fallback
             }
           }
+        }
+      }
+
+      if (referenced_nodes && referenced_nodes.length > 0) {
+        const handleCounts: Record<string, number> = {};
+        referenced_nodes.forEach(id => {
+          const node = combinedGraphState.activeNodes.find(n => n.id === id);
+          if (node && node.doppelgangerHandle) {
+            handleCounts[node.doppelgangerHandle] = (handleCounts[node.doppelgangerHandle] || 0) + 1;
+          }
+        });
+
+        let bestHandle = activeProfileHandle;
+        let maxCount = 0;
+        Object.entries(handleCounts).forEach(([handle, count]) => {
+          if (count > maxCount) {
+            maxCount = count;
+            bestHandle = handle;
+          }
+        });
+
+        if (bestHandle !== activeProfileHandle) {
+          handleSwitchProfile(bestHandle, true);
         }
       }
     } catch (err: any) {
@@ -2892,6 +2917,29 @@ export function sanitizeEdges(
             : t
         )
       );
+
+      if (referenced_nodes && referenced_nodes.length > 0) {
+        const handleCounts: Record<string, number> = {};
+        referenced_nodes.forEach(id => {
+          const node = combinedGraphState.activeNodes.find(n => n.id === id);
+          if (node && node.doppelgangerHandle) {
+            handleCounts[node.doppelgangerHandle] = (handleCounts[node.doppelgangerHandle] || 0) + 1;
+          }
+        });
+
+        let bestHandle = activeProfileHandle;
+        let maxCount = 0;
+        Object.entries(handleCounts).forEach(([handle, count]) => {
+          if (count > maxCount) {
+            maxCount = count;
+            bestHandle = handle;
+          }
+        });
+
+        if (bestHandle !== activeProfileHandle) {
+          handleSwitchProfile(bestHandle);
+        }
+      }
 
     } catch (err: any) {
       console.error(err);
@@ -4338,14 +4386,14 @@ export function sanitizeEdges(
 
                           <div>
                             <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 font-mono">Summary</h4>
-                            <p className="text-zinc-300 leading-relaxed font-normal bg-[#1C1C21]/40 p-2.5 rounded-xl border border-zinc-800/40">
+                            <p className="text-zinc-300 leading-relaxed font-normal bg-[#1C1C21]/40 p-2.5 rounded-xl border border-zinc-800">
                               {selectedNodeObj.summary}
                             </p>
                           </div>
 
                           <div>
                             <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 font-mono">Details</h4>
-                            <div className="text-zinc-350 leading-relaxed font-normal bg-[#1C1C21]/40 p-2.5 rounded-xl border border-zinc-800/40 whitespace-pre-wrap space-y-3">
+                            <div className="text-zinc-350 leading-relaxed font-normal bg-[#1C1C21]/40 p-2.5 rounded-xl border border-zinc-800 whitespace-pre-wrap space-y-3">
                               {selectedNodeObj.notes && (
                                 <div className="text-zinc-300 pb-2 border-b border-zinc-800/40">{selectedNodeObj.notes}</div>
                               )}
@@ -4381,7 +4429,7 @@ export function sanitizeEdges(
                               <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 font-mono">Related Work</h4>
                               <div className="space-y-2">
                                 {nodeDetails.relatedWork.map((work: any) => (
-                                  <div key={work.id} className="bg-[#1C1C21]/30 p-2.5 rounded-xl border border-zinc-800/40">
+                                  <div key={work.id} className="bg-[#1C1C21]/30 p-2.5 rounded-xl border border-zinc-800">
                                     <div className="text-xs font-bold text-zinc-200">{work.label}</div>
                                     {work.summary && <p className="text-[11px] text-zinc-400 mt-1">{work.summary}</p>}
                                   </div>

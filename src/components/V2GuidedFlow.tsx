@@ -2427,7 +2427,7 @@ export default function V2GuidedFlow({
           </div>
 
           {/* Node Summary */}
-          <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-650 mt-4">
+          <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-600 mt-4">
             <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Summary</div>
             <div className="text-xs text-zinc-300 leading-relaxed font-sans">
               {selectedNode.summary}
@@ -2435,7 +2435,7 @@ export default function V2GuidedFlow({
           </div>
 
           {/* Details Section (combined notes & details) */}
-          <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-650 mt-1">
+          <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-600 mt-1">
             <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Details</div>
             <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
               {selectedNode.notes && (
@@ -2470,7 +2470,7 @@ export default function V2GuidedFlow({
 
           {/* Related Work Section */}
           {panelDetails?.relatedWork && panelDetails.relatedWork.length > 0 && (
-            <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-650 mt-1">
+            <div className="space-y-2 bg-[#141417]/50 p-4 rounded-xl border border-zinc-600 mt-1">
               <div className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 font-semibold">Related Work:</div>
               <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {panelDetails.relatedWork.map((work: any) => (
