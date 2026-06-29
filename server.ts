@@ -1103,10 +1103,73 @@ User Input Query to Normalize:
     }
 
     // Step 3: Compute activated node IDs (locked — AI cannot modify this)
+    // Noun extraction from user query
+    let queryNouns: string[] = [];
+    if (matchedProjectRoot) {
+      try {
+        const nounPrompt = `You are a Noun Extractor. Analyze the following user query and extract all nouns, proper nouns, and key noun phrases.
+Return them as a JSON array of strings in lowercase.
+Do not include verbs, adverbs, adjectives (unless part of a compound noun), prepositions, or pronouns.
+Example Query: "Show me the resourcing for Mobile App Redesign" -> ["resourcing", "mobile app redesign"]
+Example Query: "timeline and sync updates" -> ["timeline", "sync", "updates"]
+
+User Query: "${query}"`;
+
+        const responseText = await aiProvider.generateResponse(nounPrompt, {
+          systemInstruction: "Return ONLY a valid JSON array of strings (e.g., [\"noun1\", \"noun2\"]). No other text, no markdown block, no explanation.",
+        });
+        const parsed = JSON.parse(responseText.trim().replace(/^```json\s*|```$/g, ""));
+        if (Array.isArray(parsed)) {
+          queryNouns = parsed.map((n: any) => String(n).toLowerCase().trim());
+        }
+      } catch (err) {
+        console.warn("Failed to extract nouns via AI, falling back to simple extraction:", err);
+      }
+    }
+
+    if (queryNouns.length === 0) {
+      queryNouns = query.toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !stopWords.has(w));
+    }
+
+    // Direct connection noun matching
+    const matchedDirectChildNodes: any[] = [];
+    if (matchedProjectRoot && queryNouns.length > 0) {
+      const connectedNodeIds = new Set<string>();
+      edges.forEach((edge: any) => {
+        const src = typeof edge.source === "object" ? edge.source.id : edge.source;
+        const tgt = typeof edge.target === "object" ? edge.target.id : edge.target;
+        if (src === matchedProjectRoot.id) {
+          connectedNodeIds.add(tgt);
+        }
+        if (tgt === matchedProjectRoot.id) {
+          connectedNodeIds.add(src);
+        }
+      });
+
+      const directChildNodes = accessibleNodes.filter((n: any) => connectedNodeIds.has(n.id) && n.id !== matchedProjectRoot.id);
+
+      directChildNodes.forEach((node: any) => {
+        const titleLower = (node.label || node.title || "").toLowerCase();
+        const matches = queryNouns.some((noun: string) => {
+          return titleLower === noun || titleLower.includes(noun) || noun.includes(titleLower);
+        });
+        if (matches) {
+          matchedDirectChildNodes.push(node);
+        }
+      });
+    }
+
+    // Step 3: Compute activated node IDs (locked — AI cannot modify this)
     const computeActivatedNodes = (): string[] => {
       const activated = new Set<string>();
 
-      if (intentType === "SUBTREE" && matchedProjectRoot) {
+      if (matchedProjectRoot && matchedDirectChildNodes.length > 0) {
+        activated.add(matchedProjectRoot.id);
+        matchedDirectChildNodes.forEach(node => activated.add(node.id));
+      } else if (intentType === "SUBTREE" && matchedProjectRoot) {
         // Rule 1 & 5: Activate the root + ALL descendants recursively via parentId
         activated.add(matchedProjectRoot.id);
         const collectDescendants = (parentId: string) => {
@@ -1304,61 +1367,69 @@ User Input Query to Normalize:
       res.write(`data: ${JSON.stringify({ type: "progress", percent: 35, phase: "Searching notes" })}\n\n`);
     }
 
-    // Semantic Vector Query retrieval helper execution
-    let queryEmbedding: number[] | null = null;
-    try {
-      queryEmbedding = await aiProvider.generateEmbedding(query);
-    } catch (e: any) {
-      console.warn("[Neural Retrieval] Failed query embedding mapping:", e.message);
-    }
-
-    // Lazy load node content embeddings for memories dynamically if missing
-    for (const note of accessibleNotes) {
-      if (!note.embedding) {
-        try {
-          note.embedding = await aiProvider.generateEmbedding(note.content);
-        } catch (embedErr: any) {
-          console.warn("[Neural Retrieval] Memory embedding lazy load missed:", embedErr.message);
-        }
+    let topNotes: any[] = [];
+    if (matchedProjectRoot && matchedDirectChildNodes.length > 0) {
+      const matchedNodeIds = new Set(matchedDirectChildNodes.map(n => n.id));
+      matchedNodeIds.add(matchedProjectRoot.id);
+      topNotes = accessibleNotes.filter((note: any) => matchedNodeIds.has(note.node_id));
+      console.log(`[Direct Retrieval] Retrieved ${topNotes.length} notes for direct noun match, bypassing semantic search.`);
+    } else {
+      // Semantic Vector Query retrieval helper execution
+      let queryEmbedding: number[] | null = null;
+      try {
+        queryEmbedding = await aiProvider.generateEmbedding(query);
+      } catch (e: any) {
+        console.warn("[Neural Retrieval] Failed query embedding mapping:", e.message);
       }
-    }
 
-    // Scoring via Hybrid (Cosine Vector Similarity + Keyword Boosts)
-    const keywordBaseline = performKeywordSweep(accessibleNotes, query, accessibleNodes, accessibleNotes.length);
-    const keywordNodeIds = new Set(keywordBaseline.map((m: any) => m.content));
-    if (streamMode) {
-      res.write(`data: ${JSON.stringify({ type: "progress", percent: 55, phase: "Mapping relevant nodes" })}\n\n`);
-    }
-
-    const scoredNotes = accessibleNotes.map((note: any) => {
-      let score = 0;
-      // Cosine distance score (0 to 1)
-      if (queryEmbedding && note.embedding) {
-        score += cosineSimilarity(queryEmbedding, note.embedding) * 0.75;
-      }
-      // Direct keyword presence boost
-      if (keywordNodeIds.has(note.content)) {
-        score += 0.25;
-      }
-      // Explicit tag matching boost
-      if (targetTags && targetTags.length > 0) {
-        const associatedNode = accessibleNodes.find((n: any) => n.id === note.node_id);
-        if (associatedNode && associatedNode.tags) {
-          const nodeTags = associatedNode.tags.split(",").map((t: string) => t.trim().toLowerCase());
-          const hasMatchingTag = targetTags.some((tag: string) => nodeTags.includes(tag));
-          if (hasMatchingTag) {
-            score += 2.0; // Substantial boost to pull matching tagged notes to the top
+      // Lazy load node content embeddings for memories dynamically if missing
+      for (const note of accessibleNotes) {
+        if (!note.embedding) {
+          try {
+            note.embedding = await aiProvider.generateEmbedding(note.content);
+          } catch (embedErr: any) {
+            console.warn("[Neural Retrieval] Memory embedding lazy load missed:", embedErr.message);
           }
         }
       }
-      return { note, score };
-    });
 
-    // Sort by descending final scores
-    scoredNotes.sort((a, b) => b.score - a.score);
-    const ql = query.toLowerCase();
-    const limit = (ql.includes("all") || ql.includes("show all") || ql.includes("notes for")) ? 30 : 8;
-    const topNotes = scoredNotes.slice(0, limit).map(item => item.note);
+      // Scoring via Hybrid (Cosine Vector Similarity + Keyword Boosts)
+      const keywordBaseline = performKeywordSweep(accessibleNotes, query, accessibleNodes, accessibleNotes.length);
+      const keywordNodeIds = new Set(keywordBaseline.map((m: any) => m.content));
+      if (streamMode) {
+        res.write(`data: ${JSON.stringify({ type: "progress", percent: 55, phase: "Mapping relevant nodes" })}\n\n`);
+      }
+
+      const scoredNotes = accessibleNotes.map((note: any) => {
+        let score = 0;
+        // Cosine distance score (0 to 1)
+        if (queryEmbedding && note.embedding) {
+          score += cosineSimilarity(queryEmbedding, note.embedding) * 0.75;
+        }
+        // Direct keyword presence boost
+        if (keywordNodeIds.has(note.content)) {
+          score += 0.25;
+        }
+        // Explicit tag matching boost
+        if (targetTags && targetTags.length > 0) {
+          const associatedNode = accessibleNodes.find((n: any) => n.id === note.node_id);
+          if (associatedNode && associatedNode.tags) {
+            const nodeTags = associatedNode.tags.split(",").map((t: string) => t.trim().toLowerCase());
+            const hasMatchingTag = targetTags.some((tag: string) => nodeTags.includes(tag));
+            if (hasMatchingTag) {
+              score += 2.0; // Substantial boost to pull matching tagged notes to the top
+            }
+          }
+        }
+        return { note, score };
+      });
+
+      // Sort by descending final scores
+      scoredNotes.sort((a, b) => b.score - a.score);
+      const ql = query.toLowerCase();
+      const limit = (ql.includes("all") || ql.includes("show all") || ql.includes("notes for")) ? 30 : 8;
+      topNotes = scoredNotes.slice(0, limit).map(item => item.note);
+    }
 
     // AI grounded prompt
     const groundingContext = topNotes.map((m: any, idx: number) => `[Block #${idx+1} - Node: ${m.node_id}] ${m.content}`).join("\n");
