@@ -1718,18 +1718,25 @@ export default function V2GuidedFlow({
                   )}
                 </div>
                 <div className="session-tabs-deck flex items-end gap-1.5 select-none overflow-x-auto no-scrollbar">
+                  <AnimatePresence mode="popLayout">
                   {headerMode === 'topics' ? (
                     sessions
                       .filter(session => {
-                        // Show tab if it has history OR if it is the currently active empty session (created by clicking +)
-                        return (session.history && session.history.length > 0) || (session.id === activeSessionId);
+                        // Do not display the tab if it has no history OR if it is still loading its initial topic
+                        if (!session.history || session.history.length === 0) return false;
+                        if (!session.topicTitle || session.topicTitle.trim() === "" || session.topicTitle === "New Thread") return false;
+                        return true;
                       })
                       .map(session => {
                         const isSelected = session.id === activeSessionId;
                         return (
-                          <div
+                          <motion.div
                             key={session.id}
                             className="group relative flex items-center"
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.3, ease: "easeOut" }}
                           >
                             <button
                               type="button"
@@ -1755,7 +1762,7 @@ export default function V2GuidedFlow({
                                 <X className="w-2.5 h-2.5" />
                               </span>
                             </button>
-                          </div>
+                          </motion.div>
                         );
                       })
                   ) : (
@@ -1813,6 +1820,7 @@ export default function V2GuidedFlow({
                       +
                     </button>
                   )}
+                  </AnimatePresence>
                 </div>
               </div>
 
