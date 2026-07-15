@@ -2538,8 +2538,10 @@ export default function V2GuidedFlow({
                   src={PROFILE_IMAGES[selectedNode.doppelgangerHandle]}
                   alt="Doppelganger Creator"
                   className="w-10 h-10 rounded-lg object-cover border border-zinc-600 bg-zinc-900 flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-[#2DD4BF]/50 transition duration-150"
-                  referrerPolicy="no-referrer"
-                  onClick={() => onSwitchProfile && onSwitchProfile(selectedNode.doppelgangerHandle!)}
+                  onClick={() => {
+    handleDoppelgangerClickFromCard(selectedNode.doppelgangerHandle!);
+    if (onSelectNode) onSelectNode(null);
+  }}
                 />
               ) : (
                 <div className="w-10 h-10 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 flex-shrink-0">
@@ -2556,7 +2558,10 @@ export default function V2GuidedFlow({
                     <>
                       <div 
                         className="text-xs font-semibold text-zinc-100 truncate cursor-pointer hover:text-[#2DD4BF] transition duration-150"
-                        onClick={() => onSwitchProfile && onSwitchProfile(creatorInfo.handle)}
+                        onClick={() => {
+    handleDoppelgangerClickFromCard(creatorInfo.handle);
+    if (onSelectNode) onSelectNode(null);
+  }}
                       >
                         {creatorInfo.name}
                       </div>
