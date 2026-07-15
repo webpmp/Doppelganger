@@ -332,6 +332,7 @@ export default function V2GuidedFlow({
 
   const [currentNodePositions, setCurrentNodePositions] = useState<{ [nodeId: string]: { x: number; y: number } } | null>(null);
   const [mapFilterMode, setMapFilterMode] = useState<'cited' | 'all'>('cited');
+  const [showInactiveNodes, setShowInactiveNodes] = useState<boolean>(true);
 
   const bypassSessionSyncRef = useRef(false);
 
@@ -886,40 +887,7 @@ export default function V2GuidedFlow({
       return;
     }
     if (!activeProfileHandle) return;
-    const pName = activeProfileHandle === "@chris.adkins" ? "Chris Adkins" :
-                  activeProfileHandle === "@alex.morgan" ? "Alex Morgan" :
-                  activeProfileHandle === "@jordan.lee" ? "Jordan Lee" : "";
-    if (!pName) return;
-
-    // Check if a session already exists with this topicTitle (case-insensitive)
-    let existingSession = sessions.find(s => s.topicTitle.toLowerCase() === pName.toLowerCase());
-
-    if (existingSession) {
-      if (activeSessionId !== existingSession.id) {
-        setActiveSessionId(existingSession.id);
-        setV2Threads(existingSession.history);
-        if (existingSession.history.length > 0) {
-          setV2FocusedThreadId(existingSession.history[existingSession.history.length - 1].id);
-        } else {
-          setV2FocusedThreadId(null);
-        }
-      }
-    } else {
-      // Create a brand new tab for this doppelganger!
-      const newSessionId = `session-profile-${activeProfileHandle.replace("@", "").replace(".", "-")}-${Date.now()}`;
-      const newSessionObj: V2Session = {
-        id: newSessionId,
-        topicTitle: pName,
-        history: []
-      };
-      setSessions(prev => {
-        if (prev.some(s => s.topicTitle.toLowerCase() === pName.toLowerCase())) return prev;
-        return [...prev, newSessionObj];
-      });
-      setActiveSessionId(newSessionId);
-      setV2Threads([]);
-      setV2FocusedThreadId(null);
-    }
+    setMapFilterMode('all');
   }, [activeProfileHandle]);
 
   // Two-way synchronization: when activeSessionId changes, populate parent threads
@@ -972,8 +940,11 @@ export default function V2GuidedFlow({
       const matchProf = ALL_HARDCODED_PROFILES.find(p => p.name.toLowerCase() === pName);
       if (matchProf && onSwitchProfile) {
         onSwitchProfile(matchProf.handle);
-      } else if (onSwitchProfile && ownerHandle && activeProfileHandle !== ownerHandle) {
-        onSwitchProfile(ownerHandle);
+      } else if (onSwitchProfile && targetSession.history.length > 0) {
+        const lastThread = targetSession.history[targetSession.history.length - 1];
+        if (lastThread.ownerHandle && activeProfileHandle !== lastThread.ownerHandle) {
+          onSwitchProfile(lastThread.ownerHandle);
+        }
       }
     }
   };
@@ -1156,7 +1127,13 @@ export default function V2GuidedFlow({
     }
 
     // 1. Get all valid allowed nodes belonging strictly to the selected Doppelganger
-    const allowedNodes = graphState.activeNodes.filter(node => {
+    const _getNodeLevel = (n: any): number => {
+      return n.level === 1 ? 1 : n.level === 2 ? 2 : n.level === 3 ? 3 : 
+             classifyNodeLevel(n.level) === 'parent' ? 1 : classifyNodeLevel(n.level) === 'child' ? 2 : 3;
+    };
+
+    const threadOwner = activeThread?.ownerHandle || activeProfileHandle;
+    const activeProfileNodes = graphState.activeNodes.filter(node => {
       if (node.node_state !== "active") return false;
       if (node.doppelgangerHandle !== activeProfileHandle) return false;
 
@@ -1167,6 +1144,32 @@ export default function V2GuidedFlow({
       }
       return true;
     });
+
+    let allowedNodes = [...activeProfileNodes];
+
+    if (showInactiveNodes) {
+      const projectLabels = new Set(activeProfileNodes.filter(n => _getNodeLevel(n) === 1).map(n => n.label));
+      const collaborativeHandles = new Set<string>();
+      
+      graphState.activeNodes.forEach(node => {
+        if (node.node_state !== "active") return;
+        const projectLabel = node.connectedProject || (_getNodeLevel(node) === 1 ? node.label : null);
+        if (projectLabel && projectLabels.has(projectLabel)) {
+          if (node.doppelgangerHandle && node.doppelgangerHandle !== threadOwner) {
+            collaborativeHandles.add(node.doppelgangerHandle);
+          }
+        }
+      });
+
+      if (collaborativeHandles.size > 0) {
+        graphState.activeNodes.forEach(node => {
+          if (node.node_state !== "active") return;
+          if (collaborativeHandles.has(node.doppelgangerHandle) && _getNodeLevel(node) === 1 && !projectLabels.has(node.label)) {
+             allowedNodes.push({ ...node, isGray: true });
+          }
+        });
+      }
+    }
 
     const allowedNodeIds = new Set(allowedNodes.map(n => n.id));
     const allEdges = graphState.edges || [];
@@ -1233,7 +1236,7 @@ export default function V2GuidedFlow({
     });
 
     return { filteredNodes: finalNodes, filteredEdges: validatedEdges };
-  }, [activeProfileHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens, mapFilterMode, activeThreadReferencedNodesStr]);
+  }, [activeProfileHandle, activeThread?.ownerHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens, mapFilterMode, activeThreadReferencedNodesStr, showInactiveNodes]);
 
   const getNodeLevel = (n: any): number => {
     if (n.level !== undefined) {

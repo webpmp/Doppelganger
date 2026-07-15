@@ -698,6 +698,14 @@ export default function KnowledgeGraphCanvas({
               const angle = (index / parentD3Nodes.length) * 2 * Math.PI;
               return width / 2 + Math.cos(angle) * (width * 0.45);
             }
+            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
+              if (!citedNodeIds.includes(d.id)) {
+                 const inactiveNodes = parentD3Nodes.filter(pn => !citedNodeIds.includes(pn.id));
+                 const index = inactiveNodes.findIndex(pn => pn.id === d.id);
+                 const angle = (index / Math.max(1, inactiveNodes.length)) * 2 * Math.PI;
+                 return width / 2 + Math.cos(angle) * (width * 0.4);
+              }
+            }
             return d.targetGridX || (width / 2);
           }
           const parentId = parentGroups.parentOfNode.get(d.id);
@@ -709,7 +717,11 @@ export default function KnowledgeGraphCanvas({
         })
         .strength((d: any) => {
           if (getNodeLevel(d) === 1) {
-            return d.id === expandedParentId ? 0.45 : 0.3;
+            if (d.id === expandedParentId) return 0.45;
+            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
+              return citedNodeIds.includes(d.id) ? 0.45 : 0.35;
+            }
+            return 0.3;
           }
           return 0.15;
         })
@@ -723,6 +735,14 @@ export default function KnowledgeGraphCanvas({
               const angle = (index / parentD3Nodes.length) * 2 * Math.PI;
               return height / 2 + Math.sin(angle) * (height * 0.45);
             }
+            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
+              if (!citedNodeIds.includes(d.id)) {
+                 const inactiveNodes = parentD3Nodes.filter(pn => !citedNodeIds.includes(pn.id));
+                 const index = inactiveNodes.findIndex(pn => pn.id === d.id);
+                 const angle = (index / Math.max(1, inactiveNodes.length)) * 2 * Math.PI;
+                 return height / 2 + Math.sin(angle) * (width * 0.4);
+              }
+            }
             return d.targetGridY || (height / 2);
           }
           const parentId = parentGroups.parentOfNode.get(d.id);
@@ -734,7 +754,11 @@ export default function KnowledgeGraphCanvas({
         })
         .strength((d: any) => {
           if (getNodeLevel(d) === 1) {
-            return d.id === expandedParentId ? 0.45 : 0.3;
+            if (d.id === expandedParentId) return 0.45;
+            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
+              return citedNodeIds.includes(d.id) ? 0.45 : 0.35;
+            }
+            return 0.3;
           }
           return 0.15;
         })
@@ -758,8 +782,13 @@ export default function KnowledgeGraphCanvas({
     // Fit Transform Zoom Calculations
     const getFitTransform = () => {
       const activeClusterNodes = d3Nodes.filter((node) => {
-        if (!expandedParentId) return true;
-        return node.id === expandedParentId || parentGroups.parentOfNode.get(node.id) === expandedParentId;
+        if (expandedParentId) {
+          return node.id === expandedParentId || parentGroups.parentOfNode.get(node.id) === expandedParentId;
+        }
+        if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
+          return citedNodeIds.includes(node.id);
+        }
+        return true;
       });
 
       if (activeClusterNodes.length === 0) return d3.zoomIdentity;

@@ -613,6 +613,38 @@ function OnboardingBackground() {
 const DEFAULT_MOCK_STATE: StateBlueprint = {
   activeNodes: [
     {
+      id: "node-10.0",
+      label: "User Research Study",
+      summary: "Quantitative and qualitative research on user onboarding.",
+      notes: "Research study led by Chris Adkins to understand the friction points during initial user onboarding and account setup.",
+      node_state: "active",
+      visibility_status: "public",
+      weight: 3,
+      level: 1,
+      priority: 4,
+      isIsolated: false,
+      access_key_hash: null,
+      accessKeyHash: null,
+      ownerName: "Chris Adkins",
+      ownerHandle: "@chris.adkins"
+    },
+    {
+      id: "node-10.1",
+      label: "User Interviews",
+      summary: "Conducting 1:1 sessions with recent signups.",
+      notes: "Scheduling and running 20 user interviews to gather qualitative feedback on the onboarding experience.",
+      node_state: "active",
+      visibility_status: "public",
+      weight: 2,
+      level: 2,
+      priority: 3,
+      isIsolated: false,
+      access_key_hash: null,
+      accessKeyHash: null,
+      parentId: "node-10.0",
+      ownerName: "Chris Adkins"
+    },
+    {
       id: "node-1.0",
       label: "Mobile App Redesign",
       summary: "Project tracking macro mobile design deliverables.",
@@ -743,6 +775,16 @@ const DEFAULT_MOCK_STATE: StateBlueprint = {
   ],
   edges: [
     {
+      source: "node-12.1",
+      target: "node-12.0",
+      relation: "child_of"
+    },
+    {
+      source: "node-10.1",
+      target: "node-10.0",
+      relation: "child_of"
+    },
+    {
       source: "node-1.2",
       target: "node-1.0",
       relation: "child_of"
@@ -773,6 +815,39 @@ const DEFAULT_MOCK_STATE: StateBlueprint = {
 
 const ALEX_MOCK_STATE: StateBlueprint = {
   activeNodes: [
+    {
+      id: "node-11.0",
+      label: "Third Party Integration",
+      summary: "Integrating external APIs for extended functionality.",
+      notes: "Project led by Alex Morgan to integrate Stripe, SendGrid, and other third-party services into the platform.",
+      node_state: "active",
+      visibility_status: "public",
+      weight: 3,
+      level: 1,
+      priority: 4,
+      isIsolated: false,
+      access_key_hash: null,
+      accessKeyHash: null,
+      ownerName: "Alex Morgan",
+      ownerHandle: "@alex.morgan"
+    },
+    {
+      id: "node-11.1",
+      label: "Payment Gateway Setup",
+      summary: "Configuring Stripe webhooks and product catalog.",
+      notes: "Setting up Stripe for processing subscriptions and handling webhook events for payment failures.",
+      node_state: "active",
+      visibility_status: "public",
+      weight: 2,
+      level: 2,
+      priority: 4,
+      isIsolated: false,
+      access_key_hash: null,
+      accessKeyHash: null,
+      parentId: "node-11.0",
+      ownerName: "Alex Morgan"
+    },
+
     {
       id: "node-a10",
       label: "Platform Developer Experience",
@@ -854,6 +929,16 @@ const ALEX_MOCK_STATE: StateBlueprint = {
   ],
   notes: [
     {
+      node_id: "node-11.0",
+      content: "Project led by Alex Morgan to integrate Stripe, SendGrid, and other third-party services into the platform.",
+      source_origin: "Journal_v1"
+    },
+    {
+      node_id: "node-11.1",
+      content: "Setting up Stripe for processing subscriptions and handling webhook events for payment failures.",
+      source_origin: "Journal_v2"
+    },
+    {
       node_id: "node-a10",
       content: "Platform developer experience strategy aiming to lower production CI builds below 120s.",
       source_origin: "Journal_v1"
@@ -886,6 +971,7 @@ const ALEX_MOCK_STATE: StateBlueprint = {
   ],
   edges: [
     { source: "node-a11", target: "node-a10", relation: "child_of" },
+    { source: "node-11.1", target: "node-11.0", relation: "child_of" },
     { source: "node-a12", target: "node-a11", relation: "grandchild_of" },
     { source: "node-a21", target: "node-a20", relation: "child_of" }
   ],
@@ -934,9 +1020,10 @@ const JORDAN_MOCK_STATE: StateBlueprint = {
       access_key_hash: null,
       accessKeyHash: null,
       isIsolated: false,
-      weight: 3.0,
-      level: 1,
-      priority: 4
+      weight: 2.0,
+      level: 2,
+      priority: 4,
+      parentId: "node-4.0"
     },
     {
       id: "node-j30",
@@ -1548,7 +1635,7 @@ export function sanitizeEdges(
    // Active Profile Handle and Dictionary for multi-brain hot-swapping
    const [activeProfileHandle, setActiveProfileHandle] = useState<string>("@chris.adkins");
    const [allProfilesDict, setAllProfilesDict] = useState<Record<string, StateBlueprint>>(() => {
-     const saved = localStorage.getItem("doppelganger_all_profiles_dict_v4");
+     const saved = localStorage.getItem("doppelganger_all_profiles_dict_v7");
      if (saved) {
        try {
          const decoded = JSON.parse(saved);

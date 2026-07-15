@@ -1091,6 +1091,17 @@ User Input Query to Normalize:
       { queryTerms: ["cobalt"],                                           labelTerms: ["cobalt"] },
     ];
 
+    // Dynamically add all Level 1 projects to the keyword map
+    accessibleNodes.forEach((n: any) => {
+      if (getStoredLevel(n) === 1) {
+        const label = (n.label || n.title || "").toLowerCase();
+        const cleanLabel = label.replace(/[^\w\s]/g, "").trim();
+        if (cleanLabel.length > 0) {
+          PROJECT_KEYWORD_MAP.push({ queryTerms: [cleanLabel], labelTerms: [cleanLabel] });
+        }
+      }
+    });
+
     let matchedProjectRoot: any = null;
     for (const mapping of PROJECT_KEYWORD_MAP) {
       if (mapping.queryTerms.some(qt => combinedQueryText.includes(qt))) {
@@ -1558,7 +1569,7 @@ Respond with valid JSON mapping the schema:
           }
         });
 
-        parsed = JSON.parse(textResponse.trim());
+        parsed = JSON.parse(textResponse.trim().replace(/^```json\s*|```$/gi, ""));
       } catch (apiError: any) {
         console.warn("Visitor query stream API failed, fallback to local answer:", apiError.message || apiError);
         
@@ -1672,7 +1683,7 @@ Respond with valid JSON mapping the schema:
           }
         });
 
-        parsed = JSON.parse(textResponse.trim());
+        parsed = JSON.parse(textResponse.trim().replace(/^```json\s*|```$/gi, ""));
       } catch (apiError: any) {
         console.warn("Visitor query full API execution failed, fallback directly:", apiError.message || apiError);
         
