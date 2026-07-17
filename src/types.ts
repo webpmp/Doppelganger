@@ -22,6 +22,7 @@ export interface ActiveNode {
   doppelganger?: string;
   doppelgangerHandle?: string;
   tags?: string;
+  answerState?: "active" | "context" | "none";
 }
 
 export interface Note {
@@ -67,6 +68,16 @@ export interface ChatMessage {
   referencedNodes?: string[];
   routingTrigger?: boolean;
   timestamp: string;
+}
+
+export interface GraphModel {
+  nodes: ActiveNode[];
+  edges: Edge[];
+}
+
+export interface AnswerGraph extends GraphModel {
+  activeNodeIds: string[];
+  contextNodeIds: string[];
 }
 
 export function stripLabelNumbering(label: string): string {

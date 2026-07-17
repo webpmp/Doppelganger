@@ -27,7 +27,7 @@ import {
   Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { ActiveNode, Note, Edge, StateBlueprint, ProposalCard, ChatMessage, LevelOverride, stripLabelNumbering, classifyNodeLevel, formatNodeLabel } from "./types";
+import { ActiveNode, Note, Edge, StateBlueprint, ProposalCard, ChatMessage, LevelOverride, stripLabelNumbering, classifyNodeLevel, formatNodeLabel, AnswerGraph, GraphModel } from "./types";
 import KnowledgeGraphCanvas from "./components/KnowledgeGraphCanvas";
 import V2GuidedFlow from "./components/V2GuidedFlow";
 import { StructuralOutline } from "./components/StructuralOutline";
@@ -1631,9 +1631,119 @@ export function sanitizeEdges(
    });
  }
  
+ export const findLevel1ParentId = (nodeId: string, nodes: ActiveNode[], edges: Edge[]): string => {
+   let currentId = nodeId;
+   let safety = 0;
+   while (safety < 10) {
+     safety++;
+     const nodeObj = nodes.find(n => n.id === currentId);
+     if (!nodeObj) break;
+     if (getNodeLevel(nodeObj) === 1) {
+       return currentId;
+     }
+     const edge = edges.find(e => {
+       const srcId = typeof e.source === 'object' ? (e.source as any).id : e.source;
+       return srcId === currentId;
+     });
+     if (edge) {
+       const tgtId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
+       currentId = tgtId;
+     } else {
+       break;
+     }
+   }
+   return currentId;
+ };
+ 
+ export const findSubtreeNodeIds = (parent1Id: string, edges: Edge[]): Set<string> => {
+   const result = new Set<string>([parent1Id]);
+   const childIds = new Set<string>();
+   edges.forEach(e => {
+     const srcId = typeof e.source === 'object' ? (e.source as any).id : e.source;
+     const tgtId = typeof e.target === 'object' ? (e.target as any).id : e.target;
+     // The child is the source, the parent is the target
+     if (tgtId === parent1Id) {
+       childIds.add(srcId);
+       result.add(srcId);
+     }
+   });
+   edges.forEach(e => {
+     const srcId = typeof e.source === 'object' ? (e.source as any).id : e.source;
+     const tgtId = typeof e.target === 'object' ? (e.target as any).id : e.target;
+     // The grandchild is the source, the child is the target
+     if (childIds.has(tgtId)) {
+       result.add(srcId);
+     }
+   });
+   return result;
+ };
+ 
+ export const buildAnswerGraph = (referencedNodes: string[], allProfilesDict: Record<string, StateBlueprint>): AnswerGraph => {
+   const nodeMap = new Map<string, ActiveNode>();
+   Object.entries(allProfilesDict).forEach(([handle, state]) => {
+     (state.activeNodes || []).forEach((n: any) => {
+       if (!nodeMap.has(n.id)) {
+         const owner = n.ownerHandle || handle;
+         nodeMap.set(n.id, {
+           ...n,
+           doppelgangerId: owner,
+           ownerId: owner,
+           _profileHandle: handle
+         });
+       }
+     });
+   });
+   const allGlobalNodes = Array.from(nodeMap.values());
+   const allGlobalEdges = Object.values(allProfilesDict).flatMap(state => state.edges || []);
+ 
+   const visibleIds = new Set<string>();
+   referencedNodes.forEach(citedId => {
+     const lvl1ParentId = findLevel1ParentId(citedId, allGlobalNodes, allGlobalEdges);
+     if (lvl1ParentId) {
+       const subtreeIds = findSubtreeNodeIds(lvl1ParentId, allGlobalEdges);
+       subtreeIds.forEach(id => visibleIds.add(id));
+     } else {
+       visibleIds.add(citedId);
+     }
+   });
+ 
+   const answerNodes = allGlobalNodes.filter(n => visibleIds.has(n.id)).map(n => {
+     const isCited = referencedNodes.includes(n.id);
+     return { ...n, answerState: isCited ? "active" : "context" };
+   });
+ 
+   const answerEdges = allGlobalEdges
+     .filter(e => {
+       const src = typeof e.source === 'object' ? (e.source as any).id : e.source;
+       const tgt = typeof e.target === 'object' ? (e.target as any).id : e.target;
+       return visibleIds.has(src) && visibleIds.has(tgt);
+     })
+     .map(e => {
+       const src = typeof e.source === 'object' ? (e.source as any).id : e.source;
+       const tgt = typeof e.target === 'object' ? (e.target as any).id : e.target;
+       // The underlying graph uses child -> parent. Reverse it to parent -> child for visualization.
+       return {
+         ...e,
+         source: tgt,
+         target: src
+       };
+     });
+ 
+   return {
+     nodes: answerNodes,
+     edges: answerEdges,
+     activeNodeIds: referencedNodes,
+     contextNodeIds: Array.from(visibleIds).filter(id => !referencedNodes.includes(id))
+   };
+ };
+ 
  export default function App() {
    // Active Profile Handle and Dictionary for multi-brain hot-swapping
    const [activeProfileHandle, setActiveProfileHandle] = useState<string>("@chris.adkins");
+   const [graphDisplayMode, setGraphDisplayMode] = useState<"profile" | "answer" | "public_profile">("profile");
+   const [focusedDoppelgangerHandle, setFocusedDoppelgangerHandle] = useState<string | null>(null);
+   const [answerGraph, setAnswerGraph] = useState<AnswerGraph | null>(null);
+
    const [allProfilesDict, setAllProfilesDict] = useState<Record<string, StateBlueprint>>(() => {
      const saved = localStorage.getItem("doppelganger_all_profiles_dict_v7");
      if (saved) {
@@ -2187,6 +2297,10 @@ export function sanitizeEdges(
     if (!profile) return;
     
     // Save current active workspace state before context switching
+    console.log("Before switch:");
+    console.log("  activeProfileHandle:", activeProfileHandle);
+    console.log("  activeThread.referencedNodes:", v2Threads.find((t: any) => t.id === v2FocusedThreadId)?.referencedNodes);
+
     setProfileWorkspaces(prev => ({
       ...prev,
       [activeProfileHandle]: {
@@ -2887,6 +3001,10 @@ export function sanitizeEdges(
       progressPhase: "Initializing query"
     };
 
+    setGraphDisplayMode("answer");
+    setFocusedDoppelgangerHandle(null);
+    setAnswerGraph(null);
+
     setV2Threads(prev => [
       ...prev.map(t => ({ ...t, isMinimized: true })),
       newThread
@@ -3006,26 +3124,9 @@ export function sanitizeEdges(
       );
 
       if (referenced_nodes && referenced_nodes.length > 0) {
-        const handleCounts: Record<string, number> = {};
-        referenced_nodes.forEach(id => {
-          const node = combinedGraphState.activeNodes.find(n => n.id === id);
-          if (node && node.doppelgangerHandle) {
-            handleCounts[node.doppelgangerHandle] = (handleCounts[node.doppelgangerHandle] || 0) + 1;
-          }
-        });
-
-        let bestHandle = activeProfileHandle;
-        let maxCount = 0;
-        Object.entries(handleCounts).forEach(([handle, count]) => {
-          if (count > maxCount) {
-            maxCount = count;
-            bestHandle = handle;
-          }
-        });
-
-        if (bestHandle !== activeProfileHandle) {
-          handleSwitchProfile(bestHandle);
-        }
+        setAnswerGraph(buildAnswerGraph(referenced_nodes, allProfilesDict));
+      } else {
+        setAnswerGraph(null);
       }
 
     } catch (err: any) {
@@ -3049,6 +3150,8 @@ export function sanitizeEdges(
     setV2FocusedThreadId(null);
     setV2Input("");
     setSelectedNodeId(null);
+    setGraphDisplayMode("profile");
+    setFocusedDoppelgangerHandle(null);
   };
 
   // Helper filters to split graph elements
@@ -3092,50 +3195,7 @@ export function sanitizeEdges(
     return unique;
   }, [activeProfileHandle, isFederatedExpanded, ownerHandle]);
 
-  const findLevel1ParentId = (nodeId: string, nodes: ActiveNode[], edges: Edge[]): string => {
-    let currentId = nodeId;
-    let safety = 0;
-    while (safety < 10) {
-      safety++;
-      const nodeObj = nodes.find(n => n.id === currentId);
-      if (!nodeObj) break;
-      if (getNodeLevel(nodeObj) === 1) {
-        return currentId;
-      }
-      const edge = edges.find(e => {
-        const srcId = typeof e.source === 'object' ? (e.source as any).id : e.source;
-        return srcId === currentId;
-      });
-      if (edge) {
-        const tgtId = typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
-        currentId = tgtId;
-      } else {
-        break;
-      }
-    }
-    return currentId;
-  };
 
-  const findSubtreeNodeIds = (parent1Id: string, edges: Edge[]): Set<string> => {
-    const result = new Set<string>([parent1Id]);
-    const childIds = new Set<string>();
-    edges.forEach(e => {
-      const srcId = typeof e.source === 'object' ? (e.source as any).id : e.source;
-      const tgtId = typeof e.target === 'object' ? (e.target as any).id : e.target;
-      if (tgtId === parent1Id) {
-        childIds.add(srcId);
-        result.add(srcId);
-      }
-    });
-    edges.forEach(e => {
-      const srcId = typeof e.source === 'object' ? (e.source as any).id : e.source;
-      const tgtId = typeof e.target === 'object' ? (e.target as any).id : e.target;
-      if (childIds.has(tgtId)) {
-        result.add(srcId);
-      }
-    });
-    return result;
-  };
 
   const visibleLocalNodes = useMemo(() => {
     // Default view constraint: If no node is selected, show only Level 1/parent nodes (level === 1)
@@ -3224,20 +3284,100 @@ export function sanitizeEdges(
   }, [selectedNodeId, renderedNodes, activeSharedNodes, graphState?.edges, visibleLocalNodes, workflowMode, citedNodeIds, activeProfileHandle, ownerHandle]);
 
   const mergedNodes = useMemo(() => {
+    if (graphDisplayMode === "answer") {
+      return answerGraph ? answerGraph.nodes : [];
+    }
+    if (graphDisplayMode === "public_profile" && focusedDoppelgangerHandle) {
+      const lookupHandle = focusedDoppelgangerHandle.startsWith("@") ? focusedDoppelgangerHandle : `@${focusedDoppelgangerHandle}`;
+      const targetState = allProfilesDict[lookupHandle];
+      
+      console.log("=== PUBLIC PROFILE RENDER TRACE ===");
+      console.log("focusedDoppelgangerHandle:", focusedDoppelgangerHandle);
+      console.log("All available profile keys:");
+      Object.entries(allProfilesDict).forEach(([key, state]) => {
+        console.log(`- handle: ${key}`);
+        console.log(`- node counts per profile: ${state.activeNodes?.length || 0}`);
+      });
+      
+      if (targetState) {
+        console.log("Source collection used to build publicProfileNodes:");
+        console.log("- collection name: targetState.activeNodes");
+        console.log("- number of nodes before filtering:", targetState.activeNodes?.length || 0);
+        console.log("Filtering criteria:");
+        console.log("- field name used for ownership comparison: n.isIsolated (public nodes)");
+        console.log("- values compared: !n.isIsolated");
+
+        const publicNodes = (targetState.activeNodes || []).filter(n => !n.isIsolated);
+        
+        const mappedNodes = publicNodes.map(n => {
+          const isCited = answerGraph?.activeNodeIds.includes(n.id);
+          const isContext = answerGraph?.contextNodeIds.includes(n.id);
+          return {
+            ...n,
+            doppelgangerId: focusedDoppelgangerHandle,
+            ownerId: focusedDoppelgangerHandle,
+            answerState: isCited ? "active" : (isContext ? "context" : "none")
+          };
+        });
+
+        console.log("Final publicProfileNodes:");
+        mappedNodes.forEach(n => {
+          console.log(`- id: ${n.id}`);
+          console.log(`- label: ${n.label || n.title}`);
+          console.log(`- owner: ${n.ownerId}`);
+        });
+        console.log("===================================");
+
+        return mappedNodes;
+      }
+      console.log("Target profile not found, returning empty array");
+      console.log("===================================");
+      return [];
+    }
+    // Mode 1: Profile Explorer
     const local = visibleLocalNodes.map(n => ({
       ...n,
       doppelgangerId: activeProfileHandle,
-      ownerId: activeProfileHandle
+      ownerId: activeProfileHandle,
+      answerState: "none"
     }));
     const shared = visibleSharedNodes.map(sn => ({
       ...sn,
       doppelgangerId: sn.ownerHandle || "shared",
-      ownerId: sn.ownerHandle || "shared"
+      ownerId: sn.ownerHandle || "shared",
+      answerState: "none"
     }));
     return [...local, ...shared];
-  }, [visibleLocalNodes, visibleSharedNodes, activeProfileHandle]);
+  }, [graphDisplayMode, answerGraph, focusedDoppelgangerHandle, allProfilesDict, visibleLocalNodes, visibleSharedNodes, activeProfileHandle]);
+
+  useEffect(() => {
+    console.log("[DEBUG] After switch (or render graph state):");
+    console.log("[DEBUG]   graphDisplayMode:", graphDisplayMode);
+    console.log("[DEBUG]   answerGraph exists?:", !!answerGraph);
+    console.log("[DEBUG]   answerGraph node count:", answerGraph ? answerGraph.nodes.length : 0);
+    console.log("[DEBUG]   focusedDoppelgangerHandle:", focusedDoppelgangerHandle);
+    console.log("[DEBUG]   activeProfileHandle:", activeProfileHandle);
+    console.log("[DEBUG]   final visible node IDs length:", mergedNodes.length);
+  }, [graphDisplayMode, answerGraph, focusedDoppelgangerHandle, activeProfileHandle, citedNodeIds, mergedNodes]);
 
   const mergedEdges = useMemo(() => {
+    if (graphDisplayMode === "answer") {
+      return answerGraph ? answerGraph.edges : [];
+    }
+    if (graphDisplayMode === "public_profile" && focusedDoppelgangerHandle) {
+      const lookupHandle = focusedDoppelgangerHandle.startsWith("@") ? focusedDoppelgangerHandle : `@${focusedDoppelgangerHandle}`;
+      const targetState = allProfilesDict[lookupHandle];
+      if (targetState) {
+        const publicNodeIds = new Set((targetState.activeNodes || []).filter(n => !n.isIsolated).map(n => n.id));
+        return (targetState.edges || []).filter(e => {
+          const src = typeof e.source === 'object' ? e.source.id : e.source;
+          const tgt = typeof e.target === 'object' ? e.target.id : e.target;
+          return publicNodeIds.has(src) && publicNodeIds.has(tgt);
+        });
+      }
+      return [];
+    }
+    // Mode 1: Profile Explorer
     const visibleLocalIds = new Set(visibleLocalNodes.map(n => n.id));
     const activeLocalEdges = renderedEdges.filter(
       e => visibleLocalIds.has(e.source) && visibleLocalIds.has(e.target)
@@ -3249,7 +3389,7 @@ export function sanitizeEdges(
       relation: "connected_shared"
     }));
     return [...activeLocalEdges, ...sharedEdges];
-  }, [renderedEdges, visibleLocalNodes, visibleSharedNodes]);
+  }, [graphDisplayMode, answerGraph, focusedDoppelgangerHandle, allProfilesDict, renderedEdges, visibleLocalNodes, visibleSharedNodes]);
 
   const selectedNodeObj = useMemo(() => {
     return mergedNodes.find(n => n.id === selectedNodeId) || null;
@@ -4093,8 +4233,20 @@ export function sanitizeEdges(
           handleResetV2Thread={handleResetV2Thread}
           ownerHandle={ownerHandle}
           onSwitchProfile={handleSwitchProfile}
+          onFocusPublicProfile={(handle) => {
+            console.log("[DEBUG] onFocusPublicProfile called with handle:", handle);
+            console.log("[DEBUG] Changing graphDisplayMode from", graphDisplayMode, "to public_profile");
+            setGraphDisplayMode("public_profile");
+            console.log("[DEBUG] Updating focusedDoppelgangerHandle to:", handle);
+            setFocusedDoppelgangerHandle(handle);
+          }}
           openDoppelgangerTab={openDoppelgangerTab}
           onOpenSettings={() => setShowSettingsModal(true)}
+          graphDisplayMode={graphDisplayMode}
+          answerGraph={answerGraph}
+          focusedDoppelgangerHandle={focusedDoppelgangerHandle}
+          publicProfileNodes={graphDisplayMode === "public_profile" ? mergedNodes : undefined}
+          publicProfileEdges={graphDisplayMode === "public_profile" ? mergedEdges : undefined}
         />
       ) : (
         <main className="flex-1 p-4 lg:p-6 flex flex-col justify-stretch">
@@ -4313,7 +4465,11 @@ export function sanitizeEdges(
                         onNodeDragged={(positions) => {
                           setCurrentNodePositions(positions);
                         }}
-                        activeDoppelgangerId={activeProfileHandle}
+                        activeDoppelgangerId={
+                          graphDisplayMode === "answer" ? undefined :
+                          graphDisplayMode === "public_profile" ? focusedDoppelgangerHandle! :
+                          activeProfileHandle
+                        }
                         resetTrigger={viewResetTrigger}
                         activeView={activeView}
                         workflowMode={workflowMode}

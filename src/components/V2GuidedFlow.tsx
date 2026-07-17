@@ -115,8 +115,14 @@ interface V2GuidedFlowProps {
   handleResetV2Thread: () => void;
   ownerHandle?: string;
   onSwitchProfile?: (handle: string) => void;
+  onFocusPublicProfile?: (handle: string) => void;
   openDoppelgangerTab?: (handle: string) => void;
   onOpenSettings?: () => void;
+  graphDisplayMode?: "profile" | "answer" | "public_profile";
+  answerGraph?: { nodes: any[]; edges: any[]; activeNodeIds: string[]; contextNodeIds: string[] } | null;
+  focusedDoppelgangerHandle?: string | null;
+  publicProfileNodes?: any[];
+  publicProfileEdges?: any[];
 }
 
 // Generate a friendly, non-technical title based on the user's question
@@ -316,8 +322,14 @@ export default function V2GuidedFlow({
   handleResetV2Thread,
   ownerHandle,
   onSwitchProfile,
+  onFocusPublicProfile,
   openDoppelgangerTab,
   onOpenSettings,
+  graphDisplayMode,
+  answerGraph,
+  focusedDoppelgangerHandle,
+  publicProfileNodes,
+  publicProfileEdges
 }: V2GuidedFlowProps) {
   if (typeof window !== "undefined" && !hasInitializedAppSession) {
     for (let i = 0; i < localStorage.length; i++) {
@@ -336,10 +348,20 @@ export default function V2GuidedFlow({
 
   const bypassSessionSyncRef = useRef(false);
 
+  console.log("onFocusPublicProfile prop:", typeof onFocusPublicProfile);
+
   const handleDoppelgangerClickFromCard = (handle: string) => {
+    console.log("Doppelganger click handler active");
+    console.log("[DEBUG] handleDoppelgangerClickFromCard fired for handle:", handle);
+    console.log("[DEBUG] graphDisplayMode is:", graphDisplayMode);
+    console.log("[DEBUG] onFocusPublicProfile exists:", !!onFocusPublicProfile);
     bypassSessionSyncRef.current = true;
     setMapFilterMode('all');
-    if (onSwitchProfile) {
+    if ((graphDisplayMode === "answer" || graphDisplayMode === "public_profile") && onFocusPublicProfile) {
+      console.log("onFocusPublicProfile called with:", handle);
+      console.log("setting focusedDoppelgangerHandle to:", handle);
+      onFocusPublicProfile(handle);
+    } else if (onSwitchProfile) {
       onSwitchProfile(handle);
     }
   };
@@ -1122,6 +1144,18 @@ export default function V2GuidedFlow({
 
   // Dynamic filter lists using strict source isolation and structural pruning
   const { filteredNodes, filteredEdges } = useMemo(() => {
+    if (graphDisplayMode === "answer") {
+      return { 
+        filteredNodes: answerGraph ? answerGraph.nodes : [], 
+        filteredEdges: answerGraph ? answerGraph.edges : [] 
+      };
+    }
+
+    if (graphDisplayMode === "public_profile" && publicProfileNodes && publicProfileEdges) {
+      console.log("[DEBUG] V2GuidedFlow returning publicProfileNodes length:", publicProfileNodes.length);
+      return { filteredNodes: publicProfileNodes, filteredEdges: publicProfileEdges };
+    }
+
     if (!graphState?.activeNodes) {
       return { filteredNodes: [], filteredEdges: [] };
     }
@@ -1236,7 +1270,7 @@ export default function V2GuidedFlow({
     });
 
     return { filteredNodes: finalNodes, filteredEdges: validatedEdges };
-  }, [activeProfileHandle, activeThread?.ownerHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens, mapFilterMode, activeThreadReferencedNodesStr, showInactiveNodes]);
+  }, [activeProfileHandle, activeThread?.ownerHandle, graphState?.activeNodes, graphState?.edges, unlockedTokens, mapFilterMode, activeThreadReferencedNodesStr, showInactiveNodes, graphDisplayMode, answerGraph, focusedDoppelgangerHandle, publicProfileNodes, publicProfileEdges]);
 
   const getNodeLevel = (n: any): number => {
     if (n.level !== undefined) {
@@ -1410,6 +1444,27 @@ export default function V2GuidedFlow({
       return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
     });
   }, [visibleNodes, filteredEdges]);
+
+  useEffect(() => {
+    console.log("=== KNOWLEDGE GRAPH CANVAS PROPS ===");
+    console.log("graphDisplayMode:", graphDisplayMode);
+    console.log("answerGraph exists?:", !!answerGraph);
+    console.log("answerGraph node count:", answerGraph ? answerGraph.nodes.length : 0);
+    console.log("focusedDoppelgangerHandle:", focusedDoppelgangerHandle);
+    console.log("nodes.length:", visibleNodes.length);
+    visibleNodes.forEach(n => {
+      console.log(`- id: ${n.id}`);
+      console.log(`  label: ${n.label || n.title}`);
+      console.log(`  owner: ${n.ownerId || n.doppelgangerHandle}`);
+      console.log(`  answerState: ${n.answerState || 'none'}`);
+    });
+    console.log("edges.length:", visibleEdges.length);
+    console.log("edges:", visibleEdges.map((e: any) => ({
+      source: typeof e.source === 'object' ? e.source.id : e.source,
+      target: typeof e.target === 'object' ? e.target.id : e.target
+    })));
+    console.log("====================================");
+  }, [graphDisplayMode, answerGraph, focusedDoppelgangerHandle, visibleNodes, visibleEdges]);
 
   // Collapse thread helper
   const collapseAllThreads = () => {
@@ -1869,7 +1924,14 @@ export default function V2GuidedFlow({
           }}
         >
           <div className="w-full h-full relative">
+            {(() => {
+              console.log("FINAL PUBLIC PROFILE GRAPH");
+              console.log("focusedDoppelgangerHandle:", focusedDoppelgangerHandle);
+              console.log("nodes:", visibleNodes.map(n => n.id));
+              return null;
+            })()}
             <KnowledgeGraphCanvas
+              key={`${graphDisplayMode}-${focusedDoppelgangerHandle || activeProfileHandle}`}
               nodes={visibleNodes}
               edges={visibleEdges}
               selectedNodeId={selectedNodeId}
@@ -2311,25 +2373,27 @@ export default function V2GuidedFlow({
                             const contrPhotoUrl = PROFILE_IMAGES[contributorProf.handle] || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
                             
                             return (
-                              <div key={handle} className="flex items-center gap-2 bg-[#0c0c0e]/40 py-1 px-2.5 rounded-lg border border-zinc-850 select-none">
+                              <div 
+                                key={handle} 
+                                className="flex items-center gap-2 bg-[#0c0c0e]/40 py-1 px-2.5 rounded-lg border border-zinc-850 select-none cursor-pointer hover:border-[#2DD4BF]/50 transition duration-150"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log("CARD CLICKED:", contributorProf.handle);
+                                  handleDoppelgangerClickFromCard(contributorProf.handle);
+                                }}
+                              >
+                                {(() => {
+                                  console.log("Rendered doppelganger card:", contributorProf.handle, "clickable:", true);
+                                  return null;
+                                })()}
                                 <img 
                                   src={contrPhotoUrl} 
                                   alt={contributorProf.name}
-                                  className="w-5 h-5 rounded object-cover border border-zinc-600 bg-zinc-950 cursor-pointer hover:ring-1 hover:ring-[#2DD4BF]/50 transition duration-150"
+                                  className="w-5 h-5 rounded object-cover border border-zinc-600 bg-zinc-950"
                                   referrerPolicy="no-referrer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDoppelgangerClickFromCard(contributorProf.handle);
-                                  }}
                                 />
                                 <div className="flex flex-col text-left font-sans">
-                                  <span 
-                                    className="text-[10px] font-semibold text-zinc-200 leading-none cursor-pointer hover:text-[#2DD4BF] hover:underline transition duration-150"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDoppelgangerClickFromCard(contributorProf.handle);
-                                    }}
-                                  >
+                                  <span className="text-[10px] font-semibold text-zinc-200 leading-none">
                                     {contributorProf.name}
                                   </span>
                                 </div>

@@ -12,7 +12,7 @@ interface KnowledgeGraphCanvasProps {
   nodePositions: { [nodeId: string]: { x: number; y: number } } | null;
   onStartDragging: (positions: { [nodeId: string]: { x: number; y: number } }) => void;
   onNodeDragged: (positions: { [nodeId: string]: { x: number; y: number } }) => void;
-  activeDoppelgangerId: string;
+  activeDoppelgangerId?: string;
   resetTrigger?: number;
   workflowMode?: 'v1' | 'v2';
   systemHasNodes?: boolean;
@@ -88,9 +88,13 @@ function getGlobalNodeColors(d: any, activeDoppelgangerId?: string): { fill: str
   const idStrRaw = String(d?.id || "");
   const isLocalNode = idStrRaw.startsWith("shared-")
     ? false
-    : (activeDoppelgangerId && d?.doppelgangerId 
-        ? (d.doppelgangerId === activeDoppelgangerId)
-        : !d?.isShared);
+    : d?.answerState === "active"
+      ? true
+      : d?.answerState === "context"
+        ? false
+        : (activeDoppelgangerId && d?.doppelgangerId 
+            ? (d.doppelgangerId === activeDoppelgangerId)
+            : !d?.isShared);
 
   if (!isLocalNode) {
     return {
@@ -251,12 +255,16 @@ export default function KnowledgeGraphCanvas({
 
   const getNodeColors = (d: any) => {
     const baseColors = getGlobalNodeColors(d, activeDoppelgangerId);
-    const idStr = String(d?.id || "");
-    const isLocal = idStr.startsWith("shared-")
+    const idStrRaw = String(d?.id || "");
+    const isLocalNode = idStrRaw.startsWith("shared-")
       ? false
-      : (activeDoppelgangerId && d?.doppelgangerId 
-          ? (d.doppelgangerId === activeDoppelgangerId)
-          : !d?.isShared);
+      : d?.answerState === "active"
+        ? true
+        : d?.answerState === "context"
+          ? false
+          : (activeDoppelgangerId && d?.doppelgangerId 
+              ? (d.doppelgangerId === activeDoppelgangerId)
+              : !d?.isShared);
 
     if (workflowMode === 'v2') {
       const lvl = d?.level !== undefined ? d?.level : (d?.weight >= 2.5 ? 1 : (d?.weight >= 1.5 ? 2 : 3));
@@ -496,11 +504,10 @@ export default function KnowledgeGraphCanvas({
 
   const isLocalNode = (nodeData: any) => {
     if (!nodeData) return false;
-    if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
-      return citedNodeIds.includes(nodeData.id);
-    }
     const idStr = String(nodeData.id || "");
     if (idStr.startsWith("shared-")) return false;
+    if (nodeData.answerState === "active") return true;
+    if (nodeData.answerState === "context") return false;
     const handle = nodeData.doppelgangerHandle || nodeData.doppelgangerId || "";
     if (activeDoppelgangerId && handle) {
       return handle === activeDoppelgangerId;
@@ -609,7 +616,7 @@ export default function KnowledgeGraphCanvas({
 
     const d3Nodes: D3Node[] = [...parentD3Nodes];
     const isOwner = activeView === 'owner';
-    if (workflowMode === 'v2' && !isOwner) {
+    if (workflowMode === 'v2') {
       parentD3Nodes.forEach(pN => {
         if (pN._children) {
           d3Nodes.push(...pN._children);
