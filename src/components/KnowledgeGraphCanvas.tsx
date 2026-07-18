@@ -161,26 +161,12 @@ function getGlobalLinkColor(link: any, activeDoppelgangerId?: string): string {
 
 function isNodeLocked(
   d: any,
-  unlockedTokens: string[],
-  parentOfNode?: Map<string, string>,
-  nodes?: ActiveNode[]
+  unlockedTokens: string[]
 ): boolean {
   if (d.visibility_status === "isolated_passphrase") {
     const key = (d.access_key_hash || d.accessKeyHash || "").toUpperCase().trim();
     if (key && !unlockedTokens.includes(key)) {
       return true;
-    }
-  }
-  if (parentOfNode && nodes) {
-    const parentId = parentOfNode.get(d.id);
-    if (parentId) {
-      const parentNode = nodes.find(n => n.id === parentId);
-      if (parentNode && parentNode.visibility_status === "isolated_passphrase") {
-        const key = (parentNode.access_key_hash || parentNode.accessKeyHash || "").toUpperCase().trim();
-        if (key && !unlockedTokens.includes(key)) {
-          return true;
-        }
-      }
     }
   }
   return false;
@@ -230,8 +216,8 @@ export default function KnowledgeGraphCanvas({
         if (currentId.includes("3.")) return 'emerald';
         if (currentId.includes("4.")) return 'amber';
         for (const edge of edges) {
-          const sId = typeof edge.source === 'object' ? edge.source.id : edge.source;
-          const tId = typeof edge.target === 'object' ? edge.target.id : edge.target;
+          const sId = edge.source && typeof edge.source === 'object' ? (edge.source as any).id : edge.source;
+          const tId = edge.target && typeof edge.target === 'object' ? (edge.target as any).id : edge.target;
           if (sId === currentId && !visited.has(tId)) {
             visited.add(tId);
             queue.push(tId);
@@ -305,8 +291,8 @@ export default function KnowledgeGraphCanvas({
       if (citedNodeIds && citedNodeIds.length > 0) {
         if (!citedNodeIds.includes(d.id)) {
           return {
-            fill: "#1f1f23",
-            stroke: "#52525b",
+            fill: "#27272A",
+            stroke: "#71717a",
             family
           };
         }
@@ -314,15 +300,6 @@ export default function KnowledgeGraphCanvas({
       return actualColors;
     }
 
-    if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
-      if (!citedNodeIds.includes(d.id) && !isLocal) {
-        return {
-          fill: "#374151",
-          stroke: "#4B5563",
-          family: baseColors.family
-        };
-      }
-    }
     return baseColors;
   };
 
@@ -358,8 +335,6 @@ export default function KnowledgeGraphCanvas({
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 600, height: 400 });
 
-  const [expandedParentId, setExpandedParentId] = useState<string | null>(null);
-
   const activeViewRef = useRef(activeView);
   useEffect(() => {
     activeViewRef.current = activeView;
@@ -376,8 +351,6 @@ export default function KnowledgeGraphCanvas({
   }, [selectedNodeId]);
 
   const hasInitialFitRef = useRef(false);
-  const prevNodesCountRef = useRef(0);
-  const prevSidebarOpenRef = useRef(false);
 
   // Persistent reference for simulation nodes coordinates
   const d3NodesRef = useRef<D3Node[]>([]);
@@ -391,100 +364,12 @@ export default function KnowledgeGraphCanvas({
     setStagedEdges(edges);
   }, [nodes, edges]);
 
-  // Synchronously auto-expand parent when a child node is selected externally, or reset when cleared
-  useEffect(() => {
-    if (workflowMode === 'v2') {
-      setExpandedParentId(null);
-      return;
-    }
-    if (selectedNodeId) {
-      const nodeObj = stagedNodes.find(n => n.id === selectedNodeId);
-      if (nodeObj) {
-        let currentId = selectedNodeId;
-        let lvl1Id = "";
-        let safety = 0;
-        while (safety < 10) {
-          safety++;
-          const targetObj = stagedNodes.find(n => n.id === currentId);
-          if (!targetObj) break;
-          if (getNodeLevel(targetObj) === 1) {
-            lvl1Id = currentId;
-            break;
-          }
-          const upId = parentGroups.parentOfNode.get(currentId);
-          if (upId) {
-            currentId = upId;
-          } else {
-            break;
-          }
-        }
-        if (lvl1Id) {
-          setExpandedParentId(lvl1Id);
-        }
-      }
-    } else {
-      setExpandedParentId(null);
-    }
-  }, [selectedNodeId, stagedNodes, workflowMode]);
-
-  useEffect(() => {
-    setExpandedParentId(null);
-  }, [activeDoppelgangerId, resetTrigger]);
-
   const getParentRadius = (d: any) => {
     const lvl = getNodeLevel(d);
     if (lvl === 1) return 36;
     if (lvl === 2) return 28;
     return 20;
   };
-
-  const parentGroups = useMemo(() => {
-    const parentOfNode = new Map<string, string>();
-    const parentMap = new Map<string, ActiveNode[]>();
-
-    const rootNodes = stagedNodes.filter(n => getNodeLevel(n) === 1);
-    rootNodes.forEach(pn => {
-      parentMap.set(pn.id, []);
-    });
-
-    stagedEdges.forEach(edge => {
-      if (edge.relation === "child_of") {
-        const childId = typeof edge.source === "object" ? edge.source.id : edge.source;
-        const parentId = typeof edge.target === "object" ? edge.target.id : edge.target;
-        parentOfNode.set(childId, parentId);
-        if (parentMap.has(parentId)) {
-          const childNode = stagedNodes.find(n => n.id === childId);
-          if (childNode) {
-            parentMap.get(parentId)!.push(childNode);
-          }
-        }
-      }
-    });
-
-    stagedNodes.forEach(n => {
-      const isSharedNode = (n as any).isShared === true || String(n.id).startsWith("shared-");
-      if (getNodeLevel(n) > 1 && !parentOfNode.has(n.id) && !isSharedNode) {
-        let matchedParent = rootNodes.find(pn => {
-          const pFamily = getFamilyNumber(pn.id);
-          const nFamily = getFamilyNumber(n.id);
-          return pFamily !== "default" && pFamily === nFamily;
-        });
-        if (matchedParent) {
-          parentOfNode.set(n.id, matchedParent.id);
-          parentMap.get(matchedParent.id)!.push(n);
-        }
-      }
-    });
-
-    stagedNodes.forEach(n => {
-      const isSharedNode = (n as any).isShared === true || String(n.id).startsWith("shared-");
-      if (isSharedNode && (n as any).parentId) {
-        parentOfNode.set(n.id, (n as any).parentId);
-      }
-    });
-
-    return { parentMap, parentOfNode };
-  }, [stagedNodes, stagedEdges]);
 
   // Handle ResizeObserver responsive sizing
   useEffect(() => {
@@ -571,12 +456,6 @@ export default function KnowledgeGraphCanvas({
     // Resolve node coordinates from previous rendering cycle to ensure continuity
     const prevNodesMap = new Map<string, D3Node>(d3NodesRef.current.map(n => [n.id, n]));
 
-    const rootActiveNodes = stagedNodes.filter(n => getNodeLevel(n) === 1);
-    const childActiveNodes = stagedNodes.filter(n => {
-      const isSharedNode = (n as any).isShared === true || String(n.id).startsWith("shared-");
-      return getNodeLevel(n) > 1 && !isSharedNode;
-    });
-
     const mapToD3Node = (n: any): D3Node => {
       const existing = prevNodesMap.get(n.id);
       const savedPos = nodePositions?.[n.id];
@@ -604,39 +483,7 @@ export default function KnowledgeGraphCanvas({
       };
     };
 
-    const parentD3Nodes = rootActiveNodes.map(mapToD3Node);
-    const childD3Map = new Map<string, D3Node>(
-      childActiveNodes.map(cNode => [cNode.id, mapToD3Node(cNode)])
-    );
-
-    parentD3Nodes.forEach(pD3 => {
-      const associatedActiveChildren = parentGroups.parentMap.get(pD3.id) || [];
-      pD3._children = associatedActiveChildren.map(cNode => childD3Map.get(cNode.id)!);
-    });
-
-    const d3Nodes: D3Node[] = [...parentD3Nodes];
-    const isOwner = activeView === 'owner';
-    if (workflowMode === 'v2') {
-      parentD3Nodes.forEach(pN => {
-        if (pN._children) {
-          d3Nodes.push(...pN._children);
-        }
-      });
-    } else if (expandedParentId) {
-      const expandedParentNode = parentD3Nodes.find(p => p.id === expandedParentId);
-      if (expandedParentNode && expandedParentNode._children) {
-        d3Nodes.push(...expandedParentNode._children);
-      }
-    }
-
-    const seenNodeIds = new Set<string>(d3Nodes.map(n => n.id));
-    const sharedNodesFromProps = stagedNodes.filter(n => (n as any).isShared === true || String(n.id).startsWith("shared-"));
-    sharedNodesFromProps.forEach(sn => {
-      if (seenNodeIds.has(sn.id)) return;
-      seenNodeIds.add(sn.id);
-      d3Nodes.push(mapToD3Node(sn));
-    });
-
+    const d3Nodes: D3Node[] = stagedNodes.map(mapToD3Node);
     d3NodesRef.current = d3Nodes;
 
     const resolvedLinksMap = new Map<string, D3Link>();
@@ -655,21 +502,12 @@ export default function KnowledgeGraphCanvas({
           target: tId,
           relation: edge.relation,
         });
-      }
-    });
-
-    parentGroups.parentOfNode.forEach((parentId, childId) => {
-      const sourceExists = d3Nodes.some(n => n.id === childId);
-      const targetExists = d3Nodes.some(n => n.id === parentId);
-      if (sourceExists && targetExists) {
-        const linkKey = `${childId}->${parentId}`;
-        if (!resolvedLinksMap.has(linkKey)) {
-          resolvedLinksMap.set(linkKey, {
-            id: linkKey,
-            source: childId,
-            target: parentId,
-            relation: "child_of",
-          });
+      } else {
+        if (!sourceExists) {
+          console.warn(`Missing source node: ${sId}`);
+        }
+        if (!targetExists) {
+          console.warn(`Missing target node: ${tId}`);
         }
       }
     });
@@ -688,92 +526,22 @@ export default function KnowledgeGraphCanvas({
     simulation
       .force("link", linkForce)
       .force("charge", d3.forceManyBody<D3Node>().strength((d: any) => {
-        if (getNodeLevel(d) === 1) {
-          if (expandedParentId) {
-            return d.id === expandedParentId ? -150 : -250;
-          }
-          return -150;
-        }
+        if (getNodeLevel(d) === 1) return -250;
+        if (getNodeLevel(d) === 2) return -150;
         return -50;
       }))
       .force("x", d3.forceX<D3Node>()
-        .x((d: any) => {
-          if (getNodeLevel(d) === 1) {
-            if (d.id === expandedParentId) return width / 2;
-            if (expandedParentId) {
-              const index = parentD3Nodes.findIndex(pn => pn.id === d.id);
-              const angle = (index / parentD3Nodes.length) * 2 * Math.PI;
-              return width / 2 + Math.cos(angle) * (width * 0.45);
-            }
-            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
-              if (!citedNodeIds.includes(d.id)) {
-                 const inactiveNodes = parentD3Nodes.filter(pn => !citedNodeIds.includes(pn.id));
-                 const index = inactiveNodes.findIndex(pn => pn.id === d.id);
-                 const angle = (index / Math.max(1, inactiveNodes.length)) * 2 * Math.PI;
-                 return width / 2 + Math.cos(angle) * (width * 0.4);
-              }
-            }
-            return d.targetGridX || (width / 2);
-          }
-          const parentId = parentGroups.parentOfNode.get(d.id);
-          if (parentId) {
-            const parentObj = d3Nodes.find(pn => pn.id === parentId);
-            return parentObj ? (parentObj.x ?? (width / 2)) : (width / 2);
-          }
-          return width / 2;
-        })
-        .strength((d: any) => {
-          if (getNodeLevel(d) === 1) {
-            if (d.id === expandedParentId) return 0.45;
-            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
-              return citedNodeIds.includes(d.id) ? 0.45 : 0.35;
-            }
-            return 0.3;
-          }
-          return 0.15;
-        })
+        .x((d: any) => d.targetGridX || (width / 2))
+        .strength(0.1)
       )
       .force("y", d3.forceY<D3Node>()
-        .y((d: any) => {
-          if (getNodeLevel(d) === 1) {
-            if (d.id === expandedParentId) return height / 2;
-            if (expandedParentId) {
-              const index = parentD3Nodes.findIndex(pn => pn.id === d.id);
-              const angle = (index / parentD3Nodes.length) * 2 * Math.PI;
-              return height / 2 + Math.sin(angle) * (height * 0.45);
-            }
-            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
-              if (!citedNodeIds.includes(d.id)) {
-                 const inactiveNodes = parentD3Nodes.filter(pn => !citedNodeIds.includes(pn.id));
-                 const index = inactiveNodes.findIndex(pn => pn.id === d.id);
-                 const angle = (index / Math.max(1, inactiveNodes.length)) * 2 * Math.PI;
-                 return height / 2 + Math.sin(angle) * (width * 0.4);
-              }
-            }
-            return d.targetGridY || (height / 2);
-          }
-          const parentId = parentGroups.parentOfNode.get(d.id);
-          if (parentId) {
-            const parentObj = d3Nodes.find(pn => pn.id === parentId);
-            return parentObj ? (parentObj.y ?? (height / 2)) : (height / 2);
-          }
-          return height / 2;
-        })
-        .strength((d: any) => {
-          if (getNodeLevel(d) === 1) {
-            if (d.id === expandedParentId) return 0.45;
-            if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
-              return citedNodeIds.includes(d.id) ? 0.45 : 0.35;
-            }
-            return 0.3;
-          }
-          return 0.15;
-        })
+        .y((d: any) => d.targetGridY || (height / 2))
+        .strength(0.1)
       )
       .force("collision", d3.forceCollide<D3Node>().radius((d: any) => {
         const rad = getParentRadius(d);
         if (getNodeLevel(d) === 1) {
-          return expandedParentId === d.id ? rad + 32 : Math.max(80, rad + 35);
+          return Math.max(80, rad + 35);
         }
         return rad + 24;
       }));
@@ -786,12 +554,24 @@ export default function KnowledgeGraphCanvas({
       simulation.tick();
     }
 
+    console.log("KNOWLEDGE GRAPH FINAL NODES");
+    console.table(d3Nodes.map(n => {
+      const originalNode = stagedNodes.find(sn => sn.id === n.id) || {};
+      return {
+        id: n.id,
+        label: n.label,
+        answerState: originalNode.answerState,
+        x: n.x,
+        y: n.y
+      };
+    }));
+
+    console.log("KNOWLEDGE GRAPH FINAL EDGES");
+    console.table(d3Links);
+
     // Fit Transform Zoom Calculations
     const getFitTransform = () => {
       const activeClusterNodes = d3Nodes.filter((node) => {
-        if (expandedParentId) {
-          return node.id === expandedParentId || parentGroups.parentOfNode.get(node.id) === expandedParentId;
-        }
         if (workflowMode === 'v2' && citedNodeIds && citedNodeIds.length > 0) {
           return citedNodeIds.includes(node.id);
         }
@@ -1001,7 +781,7 @@ export default function KnowledgeGraphCanvas({
           return lvl === 1 ? 2.5 : (lvl === 2 ? 1.5 : 1.0);
         })
         .attr("stroke-dasharray", () => {
-          const locked = isNodeLocked(d, unlockedTokens, parentGroups.parentOfNode, stagedNodes);
+          const locked = isNodeLocked(d, unlockedTokens);
           return locked ? "4,4" : null;
         })
         .style("opacity", isActive ? 0.95 : 0.85);
@@ -1019,15 +799,15 @@ export default function KnowledgeGraphCanvas({
       group.select(".node-text")
         .attr("dy", getParentRadius(d) + 24)
         .text(formatNodeLabel(d.label))
-        .attr("fill", isActive ? "#F4F4F5" : "#71717a")
-        .style("opacity", isActive ? 1.0 : 0.6);
+        .attr("fill", isActive ? "#F4F4F5" : "#a1a1aa")
+        .style("opacity", isActive ? 1.0 : 0.85);
 
       group.select("title")
         .text(`${formatNodeLabel(d.label)}: ${d.summary}`);
 
       // Apply fade transition safely
       const targetOpacity = (citedNodeIds && citedNodeIds.length > 0)
-        ? (citedNodeIds.includes(d.id) ? 1.0 : 0.55)
+        ? (citedNodeIds.includes(d.id) ? 1.0 : 0.75)
         : 1.0;
       
       if (d.isNew) {
@@ -1167,7 +947,7 @@ export default function KnowledgeGraphCanvas({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stagedNodes, stagedEdges, dimensions, expandedParentId, parentGroups, resetTrigger, citedNodeIds, workflowMode, activeDoppelgangerId, unlockedTokens]);
+  }, [stagedNodes, stagedEdges, dimensions, resetTrigger, citedNodeIds, workflowMode, activeDoppelgangerId, unlockedTokens]);
 
   // Update node selection styles dynamically when selectedNodeId changes, without recreating simulation
   useEffect(() => {

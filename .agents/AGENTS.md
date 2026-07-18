@@ -19,3 +19,6 @@ The AI must follow these rules in all responses:
 
 ## Behavioral Requirement
 Responses should focus on project meaning and content, not graph structure or hierarchy positioning.
+
+## Docker Restart Rule
+You MUST restart docker after every code change. Do not ask for permission, just restart docker using `docker-compose restart` via terminal.

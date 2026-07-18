@@ -1,0 +1,16 @@
+services:
+  doppelganger:
+    build:
+      target: builder
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+    ports:
+      # Explicitly expose 5173 for Vite HMR (Express runs on 3000)
+      - "5173:5173"
+    volumes:
+      # Mount the entire current directory to /app for live reloading
+      - .:/app
+      # Create anonymous volumes to prevent host directories from overwriting container directories
+      - /app/node_modules
+      - /app/dist

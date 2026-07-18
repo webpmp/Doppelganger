@@ -1925,9 +1925,20 @@ export default function V2GuidedFlow({
         >
           <div className="w-full h-full relative">
             {(() => {
-              console.log("FINAL PUBLIC PROFILE GRAPH");
-              console.log("focusedDoppelgangerHandle:", focusedDoppelgangerHandle);
-              console.log("nodes:", visibleNodes.map(n => n.id));
+              console.log("AnswerGraph Summary");
+              console.log("------------------");
+              console.log(`Node count: ${visibleNodes.length}`);
+              console.log(`Edge count: ${visibleEdges.length}`);
+              console.log("");
+              console.log("Nodes:");
+              visibleNodes.forEach((n: any) => {
+                console.log(`- ${n.id} | title: ${n.label} | owner: ${n.ownerId || n.ownerName} | level: ${n.level} | active: ${n.answerState}`);
+              });
+              console.log("");
+              console.log("Edges:");
+              visibleEdges.forEach((e: any) => {
+                console.log(`- source: ${typeof e.source === 'object' ? e.source.id : e.source} | target: ${typeof e.target === 'object' ? e.target.id : e.target}`);
+              });
               return null;
             })()}
             <KnowledgeGraphCanvas
