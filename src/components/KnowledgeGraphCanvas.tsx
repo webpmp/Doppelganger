@@ -521,30 +521,37 @@ export default function KnowledgeGraphCanvas({
       simulationRef.current = simulation;
     }
 
-    const linkForce = d3.forceLink<D3Node, D3Link>().id((d) => d.id);
+    const linkForce = d3.forceLink<D3Node, D3Link>()
+      .id((d) => d.id)
+      .distance((d: any) => {
+        const sLevel = getNodeLevel(d.source);
+        const tLevel = getNodeLevel(d.target);
+        if (sLevel === 1 || tLevel === 1) return 120;
+        if (sLevel === 2 || tLevel === 2) return 80;
+        return 60;
+      });
     
     simulation
       .force("link", linkForce)
       .force("charge", d3.forceManyBody<D3Node>().strength((d: any) => {
-        if (getNodeLevel(d) === 1) return -250;
-        if (getNodeLevel(d) === 2) return -150;
-        return -50;
+        if (getNodeLevel(d) === 1) return -400;
+        if (getNodeLevel(d) === 2) return -250;
+        return -120;
       }))
       .force("x", d3.forceX<D3Node>()
         .x((d: any) => d.targetGridX || (width / 2))
-        .strength(0.1)
+        .strength(0.08)
       )
       .force("y", d3.forceY<D3Node>()
         .y((d: any) => d.targetGridY || (height / 2))
-        .strength(0.1)
+        .strength(0.08)
       )
       .force("collision", d3.forceCollide<D3Node>().radius((d: any) => {
         const rad = getParentRadius(d);
-        if (getNodeLevel(d) === 1) {
-          return Math.max(80, rad + 35);
-        }
-        return rad + 24;
-      }));
+        const labelLength = (d.label || d.id || "").length;
+        const labelWidthApprox = labelLength * 6.5; // Approx px per char
+        return Math.max(rad + 30, (labelWidthApprox / 2) + 20);
+      }).iterations(3));
 
     simulation.nodes(d3Nodes);
     linkForce.links(d3Links);
@@ -596,14 +603,14 @@ export default function KnowledgeGraphCanvas({
 
       const cx = (minX + maxX) / 2;
       const cy = (minY + maxY) / 2;
-      const dx = maxX - minX;
-      const dy = maxY - minY;
+      const dx = Math.max(maxX - minX, 1);
+      const dy = Math.max(maxY - minY, 1);
 
-      const paddingPercent = 0.85;
+      const paddingPercent = 0.92;
       const scaleX = (width * paddingPercent) / dx;
       const scaleY = (height * paddingPercent) / dy;
       let scale = Math.min(scaleX, scaleY);
-      scale = Math.max(0.5, Math.min(scale, 1.2));
+      scale = Math.max(0.3, Math.min(scale, 1.3));
 
       const tx = width / 2 - cx * scale;
       const ty = height / 2 - cy * scale;
